@@ -203,7 +203,7 @@ void Settings::set_defaults()
     fullscreen = false;
     fovDegrees = 60.0f;
     mouseSensitivity = 0.002f;
-    levelFile = "assets/levels/csg_test.vmis";
+    levelFile = "assets/levels/test.vmis";
 
     // Default keybinds
     keybinds[Action::MoveForward] = 'W';

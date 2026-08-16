@@ -5,7 +5,9 @@
 #include "ui/ui_renderer.h"
 #include "editor_camera.h"
 #include "editor_settings.h"
+#include "editor_ui.h"
 #include <vector>
+#include <memory>
 #include <wrl/client.h>
 
 class Editor {
@@ -24,6 +26,7 @@ public:
     void delete_selected();
     void add_brush(BrushType type, ShapeType shape);
     void select_brush(int index);
+    int pick_brush(int mouseX, int mouseY);
 
     // Camera access
     Camera* get_camera() { return m_editorCamera.get_camera(); }
@@ -32,15 +35,26 @@ public:
     // Settings
     void set_keybinds(const EditorKeybindSettings& keybinds);
 
+    // UI access
+    EditorUI* get_ui() { return m_uiHandler.get(); }
+
     // Input events
-    void on_mouse_move(int dx, int dy, bool leftDown, bool middleDown, bool rightDown);
+    void on_mouse_move(int dx, int dy, bool leftDown, bool middleDown, bool rightDown, int modMask);
     void on_mouse_button(int button, bool pressed);
     void on_mouse_wheel(int delta);
     void on_key_down(int key, bool ctrl, bool shift);
     void on_key_up(int key);
 
+    // Edit callbacks from UI
+    void apply_brush_edit(int field, float value);
+    void cancel_brush_edit();
+
 private:
     void rebuild_wireframe_buffer();
+
+    // Raycasting helpers
+    Vec3 screen_to_world_ray(int mouseX, int mouseY); // removed const
+    bool intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir, const Vec3& boxMin, const Vec3& boxMax, float& outT) const;
 
     Renderer* m_renderer = nullptr;
     Level* m_level = nullptr;
@@ -52,7 +66,8 @@ private:
     EditorCamera m_editorCamera;
     EditorKeybindSettings m_keybinds;
 
-    // Dynamic wireframe buffer
+    std::unique_ptr<EditorUI> m_uiHandler;
+
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_wireframeBuffer;
     int m_wireframeVertexCount = 0;
 

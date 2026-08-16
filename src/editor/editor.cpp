@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <string>
 #include <vector>
+#include <cfloat>
 #include <cstring>
 
 Editor::Editor() {}
@@ -37,6 +38,9 @@ bool Editor::initialize(Renderer* renderer, Level* level, UIRenderer* ui) {
         LOG_WARN("Editor: could not create wireframe buffer");
     }
 
+    // Create UI handler
+    m_uiHandler = std::make_unique<EditorUI>(this, m_ui);
+
     m_initialized = true;
     LOG_INFO("Editor initialized.");
     return true;
@@ -44,6 +48,7 @@ bool Editor::initialize(Renderer* renderer, Level* level, UIRenderer* ui) {
 
 void Editor::shutdown() {
     m_wireframeBuffer.Reset();
+    m_uiHandler.reset();
     m_initialized = false;
 }
 
@@ -52,10 +57,13 @@ void Editor::sync_brushes() {
     if (m_selectedIndex >= (int)m_brushes.size()) {
         m_selectedIndex = -1;
     }
+    if (m_uiHandler) {
+        m_uiHandler->set_brushes(m_brushes);
+        m_uiHandler->set_selected(m_selectedIndex);
+    }
 }
 
 void Editor::update(float dt) {
-    // EditorCamera updates itself via orbit/pan/zoom calls.
     (void)dt;
 }
 
@@ -69,49 +77,15 @@ void Editor::set_keybinds(const EditorKeybindSettings& keybinds) {
 void Editor::render() {
     if (!m_initialized) return;
 
-    // ---- Brush wireframes ----
+    // Brush wireframes
     rebuild_wireframe_buffer();
     if (m_wireframeBuffer && m_wireframeVertexCount > 0) {
         m_renderer->draw_lines(m_wireframeBuffer.Get(), m_wireframeVertexCount);
     }
 
-    // ---- 2D UI overlay ----
-    float y = 50.0f;
-    m_ui->draw_text(10.0f, y, "=== Brush List ===", 1.0f, 1.0f, 1.0f, 1.0f);
-    y += 20.0f;
-
-    for (size_t i = 0; i < m_brushes.size(); ++i) {
-        const auto& b = m_brushes[i];
-        char buf[256];
-        snprintf(buf, sizeof(buf), "[%zu] %s %s (%.1f,%.1f,%.1f)",
-                 i,
-                 (b.type == BrushType::Add) ? "Add" : "Sub",
-                 (b.shape == ShapeType::Box) ? "Box" : "Wedge",
-                 b.center.x, b.center.y, b.center.z);
-        bool sel = (i == (size_t)m_selectedIndex);
-        float r = sel ? 1.0f : 0.7f;
-        float g = sel ? 1.0f : 0.7f;
-        float bl = sel ? 0.2f : 0.7f;
-        m_ui->draw_text(20.0f, y, buf, r, g, bl, 1.0f);
-        y += 16.0f;
-        if (y > (float)m_ui->get_height() - 40.0f) break;
-    }
-
-    // ---- Properties panel ----
-    if (m_selectedIndex >= 0 && m_selectedIndex < (int)m_brushes.size()) {
-        const auto& b = m_brushes[m_selectedIndex];
-        char info[512];
-        snprintf(info, sizeof(info),
-                 "Selected #%d\n"
-                 "Type: %s\nShape: %s\n"
-                 "Pos: (%.1f, %.1f, %.1f)\n"
-                 "Size: (%.1f, %.1f, %.1f)",
-                 m_selectedIndex,
-                 (b.type == BrushType::Add) ? "Add" : "Sub",
-                 (b.shape == ShapeType::Box) ? "Box" : "Wedge",
-                 b.center.x, b.center.y, b.center.z,
-                 b.size.x, b.size.y, b.size.z);
-        m_ui->draw_text(200.0f, 50.0f, info, 1.0f, 1.0f, 1.0f, 1.0f);
+    // 2D UI
+    if (m_uiHandler) {
+        m_uiHandler->render();
     }
 }
 
@@ -122,7 +96,7 @@ void Editor::rebuild_wireframe_buffer() {
     if (!m_wireframeBuffer) return;
 
     std::vector<Vertex> lineVerts;
-    lineVerts.reserve(m_brushes.size() * 48); // rough estimate
+    lineVerts.reserve(m_brushes.size() * 48);
 
     for (size_t i = 0; i < m_brushes.size(); ++i) {
         const auto& b = m_brushes[i];
@@ -154,6 +128,80 @@ void Editor::rebuild_wireframe_buffer() {
 }
 
 // ---------------------------------------------------------------------
+// 3D Pick
+// ---------------------------------------------------------------------
+int Editor::pick_brush(int mouseX, int mouseY) {
+    if (!m_initialized || m_brushes.empty()) return -1;
+
+    Vec3 rayOrigin = m_editorCamera.get_camera()->get_position();
+    Vec3 rayDir = screen_to_world_ray(mouseX, mouseY);
+
+    int bestIdx = -1;
+    float bestT = FLT_MAX;
+
+    for (size_t i = 0; i < m_brushes.size(); ++i) {
+        const auto& b = m_brushes[i];
+        Vec3 half = b.size * 0.5f;
+        Vec3 min = b.center - half;
+        Vec3 max = b.center + half;
+
+        float t;
+        if (intersect_aabb(rayOrigin, rayDir, min, max, t)) {
+            if (t < bestT) {
+                bestT = t;
+                bestIdx = (int)i;
+            }
+        }
+    }
+    return bestIdx;
+}
+
+Vec3 Editor::screen_to_world_ray(int mouseX, int mouseY) {
+    int width = m_ui->get_width();
+    int height = m_ui->get_height();
+    if (width == 0 || height == 0) return {0,0,0};
+
+    float ndcX = (2.0f * mouseX / width) - 1.0f;
+    float ndcY = 1.0f - (2.0f * mouseY / height);
+
+    Camera* cam = m_editorCamera.get_camera(); // now returns Camera* (non-const)
+    Mat4 view = cam->get_view_matrix();
+    float aspect = (float)width / (float)height;
+    Mat4 proj = mat4_perspective(60.0f * 3.14159265f / 180.0f, aspect, 0.1f, 1000.0f);
+
+    // Simple ray from camera position through NDC point
+    Vec3 forward = cam->get_forward();
+    Vec3 right = cam->get_right();
+    Vec3 up = cam->get_up();
+    Vec3 dir = forward + right * ndcX + up * ndcY;
+    dir = dir.normalized();
+    return dir;
+}
+
+bool Editor::intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir, const Vec3& boxMin, const Vec3& boxMax, float& outT) const {
+    float tMin = -FLT_MAX, tMax = FLT_MAX;
+    for (int i = 0; i < 3; ++i) {
+        float origin = (i == 0) ? rayOrigin.x : (i == 1) ? rayOrigin.y : rayOrigin.z;
+        float dir = (i == 0) ? rayDir.x : (i == 1) ? rayDir.y : rayDir.z;
+        float min = (i == 0) ? boxMin.x : (i == 1) ? boxMin.y : boxMin.z;
+        float max = (i == 0) ? boxMax.x : (i == 1) ? boxMax.y : boxMax.z;
+
+        if (fabsf(dir) < 1e-6f) {
+            if (origin < min || origin > max) return false;
+        } else {
+            float t1 = (min - origin) / dir;
+            float t2 = (max - origin) / dir;
+            if (t1 > t2) std::swap(t1, t2);
+            tMin = std::max(tMin, t1);
+            tMax = std::min(tMax, t2);
+            if (tMin > tMax) return false;
+        }
+    }
+    outT = tMin;
+    return true;
+}
+
+// ---------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------
 void Editor::save_level() {
@@ -162,7 +210,6 @@ void Editor::save_level() {
         return;
     }
 
-    // Build material table
     std::vector<VMBMaterial> materials;
     std::unordered_map<std::string, int> texToIndex;
     std::vector<int> materialIndices;
@@ -191,11 +238,9 @@ void Editor::save_level() {
         materialIndices.push_back(matIdx);
     }
 
-    // Run CSG
     std::vector<CSGPoly> polys = compile_csg(m_brushes, materialIndices, materials);
     LOG_INFO("CSG produced %zu polygons", polys.size());
 
-    // Convert to Vertex + indices
     std::vector<Vertex> bakedVerts;
     std::vector<uint32_t> bakedIndices;
     bakedVerts.reserve(polys.size() * 3);
@@ -222,7 +267,6 @@ void Editor::save_level() {
         }
     }
 
-    // Convert materials to VMIS format
     std::vector<VMISMaterial> vmisMats;
     vmisMats.reserve(materials.size());
     for (const auto& mb : materials) {
@@ -237,7 +281,6 @@ void Editor::save_level() {
         vmisMats.push_back(vm);
     }
 
-    // Physics triangles
     std::vector<Triangle> physTris;
     physTris.reserve(bakedIndices.size() / 3);
     for (size_t i = 0; i < bakedIndices.size(); i += 3) {
@@ -258,7 +301,6 @@ void Editor::save_level() {
         return;
     }
 
-    // Reload level and sync brushes
     m_level->reload(m_renderer);
     sync_brushes();
     LOG_INFO("Level saved and reloaded.");
@@ -268,6 +310,10 @@ void Editor::delete_selected() {
     if (m_selectedIndex < 0 || m_selectedIndex >= (int)m_brushes.size()) return;
     m_brushes.erase(m_brushes.begin() + m_selectedIndex);
     m_selectedIndex = -1;
+    if (m_uiHandler) {
+        m_uiHandler->set_brushes(m_brushes);
+        m_uiHandler->set_selected(m_selectedIndex);
+    }
 }
 
 void Editor::add_brush(BrushType type, ShapeType shape) {
@@ -279,6 +325,10 @@ void Editor::add_brush(BrushType type, ShapeType shape) {
     for (auto& f : b.faces) f = FaceTexture();
     m_brushes.push_back(b);
     m_selectedIndex = (int)m_brushes.size() - 1;
+    if (m_uiHandler) {
+        m_uiHandler->set_brushes(m_brushes);
+        m_uiHandler->set_selected(m_selectedIndex);
+    }
 }
 
 void Editor::select_brush(int index) {
@@ -287,19 +337,52 @@ void Editor::select_brush(int index) {
     } else {
         m_selectedIndex = -1;
     }
+    if (m_uiHandler) {
+        m_uiHandler->set_selected(m_selectedIndex);
+    }
+}
+
+// ---------------------------------------------------------------------
+// Edit callbacks from UI
+// ---------------------------------------------------------------------
+void Editor::apply_brush_edit(int field, float value) {
+    if (m_selectedIndex < 0 || m_selectedIndex >= (int)m_brushes.size()) return;
+    auto& b = m_brushes[m_selectedIndex];
+    switch ((EditorUI::EditField)field) {
+        case EditorUI::EditField::PosX: b.center.x = value; break;
+        case EditorUI::EditField::PosY: b.center.y = value; break;
+        case EditorUI::EditField::PosZ: b.center.z = value; break;
+        case EditorUI::EditField::SizeX: b.size.x = std::max(value, 0.1f); break;
+        case EditorUI::EditField::SizeY: b.size.y = std::max(value, 0.1f); break;
+        case EditorUI::EditField::SizeZ: b.size.z = std::max(value, 0.1f); break;
+        default: break;
+    }
+    // Not saved yet; user must Ctrl+S to persist.
+}
+
+void Editor::cancel_brush_edit() {
+    // UI will reset its edit state.
 }
 
 // ---------------------------------------------------------------------
 // Input handling
 // ---------------------------------------------------------------------
-void Editor::on_mouse_move(int dx, int dy, bool leftDown, bool middleDown, bool rightDown) {
-    if (leftDown) {
+void Editor::on_mouse_move(int dx, int dy, bool leftDown, bool middleDown, bool rightDown, int modMask) {
+    // Determine which button is down
+    MouseButton downButton = MouseButton::None;
+    if (leftDown) downButton = MouseButton::Left;
+    else if (middleDown) downButton = MouseButton::Middle;
+    else if (rightDown) downButton = MouseButton::Right;
+    else return; // no button
+
+    if (downButton == m_keybinds.orbitButton && (modMask & 0x7) == m_keybinds.orbitModifier) {
         m_editorCamera.orbit((float)dx, (float)dy);
+        return;
     }
-    if (middleDown) {
+    if (downButton == m_keybinds.panButton && (modMask & 0x7) == m_keybinds.panModifier) {
         m_editorCamera.pan((float)dx, (float)dy);
+        return;
     }
-    (void)rightDown; // not used
 }
 
 void Editor::on_mouse_button(int button, bool pressed) {

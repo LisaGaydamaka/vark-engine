@@ -100,6 +100,7 @@ target_link_libraries(vibe_ui PRIVATE d3d11 d3dcompiler)
 # ---- Editor library (editor logic, uses CSG) ----
 add_library(vibe_editor STATIC
     src/editor/editor.cpp
+    src/editor/editor_ui.cpp
     src/editor/editor_camera.cpp   # <-- ADDED
     src/editor/editor_settings.cpp   # <-- add
 )

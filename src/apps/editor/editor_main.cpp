@@ -18,6 +18,9 @@ static Level g_level;
 static UIRenderer g_ui;
 static Editor g_editor;
 
+static int g_clickX = 0, g_clickY = 0;
+static bool g_clickValid = false;
+
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
         case WM_DESTROY:
@@ -46,24 +49,55 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             bool middleDown = (wParam & MK_MBUTTON) != 0;
             bool rightDown  = (wParam & MK_RBUTTON) != 0;
 
+            int modMask = 0;
+            if (GetAsyncKeyState(VK_CONTROL) & 0x8000) modMask |= 1;
+            if (GetAsyncKeyState(VK_SHIFT)   & 0x8000) modMask |= 2;
+            if (GetAsyncKeyState(VK_MENU)    & 0x8000) modMask |= 4;
+
             if (leftDown || middleDown || rightDown) {
-                g_editor.on_mouse_move(x - lastX, y - lastY, leftDown, middleDown, rightDown);
+                g_editor.on_mouse_move(x - lastX, y - lastY, leftDown, middleDown, rightDown, modMask);
             }
 
             lastX = x;
             lastY = y;
             return 0;
         }
-        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDOWN: {
+            g_clickX = GET_X_LPARAM(lParam);
+            g_clickY = GET_Y_LPARAM(lParam);
+            g_clickValid = true;
             g_editor.on_mouse_button(0, true);
             return 0;
-        case WM_LBUTTONUP:
+        }
+        case WM_LBUTTONUP: {
+            int x = GET_X_LPARAM(lParam);
+            int y = GET_Y_LPARAM(lParam);
+            if (g_clickValid && abs(x - g_clickX) < 5 && abs(y - g_clickY) < 5) {
+                // Check UI first
+                bool consumed = g_editor.get_ui()->on_mouse_click(x, y);
+                if (!consumed) {
+                    int idx = g_editor.pick_brush(x, y);
+                    if (idx >= 0) {
+                        g_editor.select_brush(idx);
+                    }
+                }
+            }
+            g_clickValid = false;
             g_editor.on_mouse_button(0, false);
             return 0;
+        }
+        case WM_CHAR: {
+            char c = (char)wParam;
+            g_editor.get_ui()->on_text_input(c);
+            return 0;
+        }
         case WM_KEYDOWN: {
             bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
             bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-            g_editor.on_key_down((int)wParam, ctrl, shift);
+            // Also pass to UI for potential key handling (e.g., escape to cancel)
+            if (!g_editor.get_ui()->on_key_down((int)wParam)) {
+                g_editor.on_key_down((int)wParam, ctrl, shift);
+            }
             return 0;
         }
         default:
@@ -82,12 +116,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     Logger::instance().init("logs/editor.log");
     LOG_INFO("=== Vibe Editor ===");
 
-    // ---- Load editor settings ----
+    // Load editor settings
     EditorSettings settings;
     settings.load("editor.ini");
-    settings.save("editor.ini"); // ensures file exists with defaults
+    settings.save("editor.ini");
 
-    // ---- Create window ----
+    // Create window
     int width = settings.display.windowWidth;
     int height = settings.display.windowHeight;
 
@@ -110,26 +144,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return -1;
     }
 
-    // ---- Init renderer ----
     if (!g_renderer.initialize(g_hwnd, width, height)) {
         LOG_ERROR("Renderer init failed");
         return -1;
     }
 
-    // ---- Init UI ----
     if (!g_ui.initialize(&g_renderer, width, height)) {
         LOG_ERROR("UI renderer init failed");
         return -1;
     }
 
-    // ---- Init editor ----
+    // Initialize editor
     if (!g_editor.initialize(&g_renderer, &g_level, &g_ui)) {
         LOG_ERROR("Editor init failed");
         return -1;
     }
     g_editor.set_keybinds(settings.keybinds);
 
-    // ---- Load level ----
+    // Load level
     const char* levelPath = "assets/levels/test.vmis";
     if (lpCmdLine && lpCmdLine[0]) {
         levelPath = lpCmdLine;
@@ -140,7 +172,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     g_editor.sync_brushes();
 
-    // ---- Main loop ----
     MSG msg = {};
     while (msg.message != WM_QUIT) {
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -153,14 +184,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         g_renderer.begin_frame();
 
-        // Get current window dimensions from UI renderer (updated on resize)
-        int width = g_ui.get_width();
-        int height = g_ui.get_height();
+        // Get current window size from UI renderer (updated on resize)
+        int curWidth = g_ui.get_width();
+        int curHeight = g_ui.get_height();
 
         Camera* cam = g_editor.get_camera();
         if (cam) {
             Mat4 view = cam->get_view_matrix();
-            float aspect = (float)width / (float)height;
+            float aspect = (float)curWidth / (float)curHeight;
             Mat4 proj = mat4_perspective(60.0f * 3.14159265f / 180.0f, aspect, 0.1f, 1000.0f);
             Mat4 mvp = Mat4::identity() * view * proj;
             g_renderer.set_transform(mvp);
@@ -174,7 +205,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         g_renderer.end_frame();
     }
 
-    // ---- Cleanup ----
     g_editor.shutdown();
     g_ui.shutdown();
     g_level.shutdown(&g_renderer);
