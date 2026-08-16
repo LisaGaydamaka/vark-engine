@@ -1,6 +1,5 @@
 #include "level.h"
 #include "physics/physics_world.h"
-#include "world/vmb_format.h"
 #include "world/vmis_format.h"
 #include "world/vmis_io.h"        // NEW
 #include "core/logger.h"
@@ -131,116 +130,6 @@ void Level::add_brush(const Brush& brush)
 {
     brushes.push_back(brush);
 }
-
-bool Level::load_vmb(const char* path, Renderer* renderer)
-{
-    FILE* f = nullptr; fopen_s(&f, path, "rb");
-    if (!f) {
-        LOG_ERROR("Could not open %s", path);
-        return false;
-    }
-
-    VMBHeader header;
-    fread(&header, sizeof(header), 1, f);
-
-    std::vector<VMBVertex> vmbVerts(header.vertexCount);
-    std::vector<VMBTriangle> tris(header.indexCount / 3);
-    std::vector<VMBMaterial> mats(header.materialCount);
-
-    fread(vmbVerts.data(), sizeof(VMBVertex), header.vertexCount, f);
-    fread(tris.data(), sizeof(VMBTriangle), tris.size(), f);
-    fread(mats.data(), sizeof(VMBMaterial), header.materialCount, f);
-    fclose(f);
-
-    LOG_INFO("Loaded VMB: %u vertices, %u indices, %u materials",
-           header.vertexCount, header.indexCount, header.materialCount);
-
-    ID3D11Device* device = (ID3D11Device*)renderer->get_device();
-    if (!device) {
-        LOG_ERROR("Renderer device is null!");
-        return false;
-    }
-
-    // ---- Convert VMB vertices to engine Vertex ----
-    std::vector<Vertex> engineVerts;
-    engineVerts.reserve(vmbVerts.size());
-    for (const auto& v : vmbVerts) {
-        Vertex ev;
-        ev.x = v.x; ev.y = v.y; ev.z = v.z;
-        ev.u = v.u; ev.v = v.v;
-        ev.r = 1.0f; ev.g = 1.0f; ev.b = 1.0f;
-        engineVerts.push_back(ev);
-    }
-
-    // ---- Vertex buffer ----
-    D3D11_BUFFER_DESC vbd = {};
-    vbd.Usage = D3D11_USAGE_DEFAULT;
-    vbd.ByteWidth = (UINT)(engineVerts.size() * sizeof(Vertex));
-    vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    D3D11_SUBRESOURCE_DATA vdata = { engineVerts.data() };
-    ComPtr<ID3D11Buffer> vbuf;
-    HRESULT hr = device->CreateBuffer(&vbd, &vdata, vbuf.GetAddressOf());
-    if (FAILED(hr) || !vbuf) {
-        LOG_ERROR("Failed to create vertex buffer (hr=0x%08X)", hr);
-        return false;
-    }
-
-    // ---- Index buffer (32‑bit) ----
-    std::vector<uint32_t> indices;
-    indices.reserve(tris.size() * 3);
-    for (auto& tri : tris) {
-        indices.push_back(tri.i0);
-        indices.push_back(tri.i1);
-        indices.push_back(tri.i2);
-    }
-    D3D11_BUFFER_DESC ibd = {};
-    ibd.Usage = D3D11_USAGE_DEFAULT;
-    ibd.ByteWidth = (UINT)(indices.size() * sizeof(uint32_t));
-    ibd.BindFlags = D3D11_BIND_INDEX_BUFFER;
-    D3D11_SUBRESOURCE_DATA idata = { indices.data() };
-    ComPtr<ID3D11Buffer> ibuf;
-    hr = device->CreateBuffer(&ibd, &idata, ibuf.GetAddressOf());
-    if (FAILED(hr) || !ibuf) {
-        LOG_ERROR("Failed to create index buffer (hr=0x%08X)", hr);
-        return false;
-    }
-
-    // ---- Renderable ----
-    Renderable rend;
-    rend.vertexBuffer = vbuf;
-    rend.indexBuffer = ibuf;
-    rend.indexCount = (int)indices.size();
-
-    // ---- Load texture ----
-    if (mats.size() > 0) {
-        LOG_INFO("Loading texture: %s", mats[0].textureName);
-        rend.textureView = (ID3D11ShaderResourceView*)renderer->load_texture(mats[0].textureName);
-        if (!rend.textureView) {
-            LOG_WARN("Texture load failed, using default");
-            rend.textureView = (ID3D11ShaderResourceView*)renderer->load_texture("zebra.png");
-        }
-    } else {
-        rend.textureView = (ID3D11ShaderResourceView*)renderer->load_texture("zebra.png");
-    }
-
-    renderables.push_back(std::move(rend));
-
-    // ---- Physics ----
-    m_collisionTriangles.clear();
-    for (auto& tri : tris) {
-        Triangle t;
-        t.v0 = { vmbVerts[tri.i0].x, vmbVerts[tri.i0].y, vmbVerts[tri.i0].z };
-        t.v1 = { vmbVerts[tri.i1].x, vmbVerts[tri.i1].y, vmbVerts[tri.i1].z };
-        t.v2 = { vmbVerts[tri.i2].x, vmbVerts[tri.i2].y, vmbVerts[tri.i2].z };
-        m_collisionTriangles.push_back(t);
-    }
-    m_physicsWorld.build(m_collisionTriangles);
-
-    build_debug_mesh(renderer);
-
-    return true;
-}
-
 // ----------------------------------------------------------------------
 // NEW: load_vmis
 // ----------------------------------------------------------------------
@@ -465,30 +354,20 @@ void Level::set_debug_mode(bool enabled)
     LOG_INFO("Debug mode %s", enabled ? "ON" : "OFF");
 }
 
-bool Level::build(Renderer* renderer, const char* levelPath)
-{
+bool Level::build(Renderer* renderer, const char* levelPath) {
     if (!levelPath || levelPath[0] == '\0') {
         LOG_ERROR("No level file specified in settings.");
         return false;
     }
-    m_levelPath = levelPath;   // store
-
-    // Try loading as VMIS first
+    m_levelPath = levelPath;
     if (load_vmis(levelPath, renderer)) {
         LOG_INFO("Loaded level from %s (VMIS format)", levelPath);
         return true;
     }
-
-    // Fallback to VMB for backward compatibility (optional)
-    LOG_WARN("VMIS load failed, trying VMB...");
-    if (load_vmb(levelPath, renderer)) {
-        LOG_INFO("Loaded level from %s (VMB format, legacy)", levelPath);
-        return true;
-    }
-
     LOG_ERROR("Failed to load level file: %s", levelPath);
     return false;
 }
+
 
 bool Level::reload(Renderer* renderer) {
     if (m_levelPath.empty()) {

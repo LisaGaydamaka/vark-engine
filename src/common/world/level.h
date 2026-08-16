@@ -34,7 +34,6 @@ public:
     void add_brush(const Brush& brush);
 
     bool build(Renderer* renderer, const char* levelPath = nullptr);
-    bool load_vmb(const char* path, Renderer* renderer);   // kept for reference
     bool load_vmis(const char* path, Renderer* renderer);  // NEW
     void render(Renderer* renderer);
     void shutdown(Renderer* renderer);

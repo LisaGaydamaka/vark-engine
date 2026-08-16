@@ -1,19 +1,16 @@
+// src/compiler/csg_solver.h
 #pragma once
 #include "csg_types.h"
-#include "world/vmb_format.h"   // <-- ADD THIS
+#include "world/vmis_format.h"   // now using VMISMaterial
 #include <vector>
 
 // ---- Main entry points ----
 void export_OBJ(const std::vector<CSGPoly>& polys, const char* path);
-bool save_vmb(const char* path, const std::vector<CSGPoly>& polys);
 
-// CSG compilation – needs brushes, per‑brush material indices, and the material table
+// CSG compilation – uses VMISMaterial for material data
 std::vector<CSGPoly> compile_csg(const std::vector<Brush>& brushes,
                                  const std::vector<int>& materialIndices,
-                                 const std::vector<VMBMaterial>& materials);
+                                 const std::vector<VMISMaterial>& materials);
 
-// Legacy: compile .vm → .vmb (kept for compatibility)
-bool compile_vm_to_vmb(const char* vmPath, const char* vmbPath);
-
-// NEW: compile .vm → .vmis
-bool compile_vm_to_vmis(const char* vmPath, const char* vmisPath);
+// Rebake an existing .vmis file: read brushes, run CSG, write back
+bool rebake_vmis(const char* vmisPath);

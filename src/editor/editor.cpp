@@ -4,6 +4,7 @@
 #include "core/geometry.h"
 #include "compiler/csg_solver.h"
 #include "world/vmis_io.h"
+#include "world/vmis_format.h" 
 #include <d3d11.h>
 #include <algorithm>
 #include <unordered_map>
@@ -210,7 +211,8 @@ void Editor::save_level() {
         return;
     }
 
-    std::vector<VMBMaterial> materials;
+    // Build material table (VMISMaterial) and indices
+    std::vector<VMISMaterial> materials;
     std::unordered_map<std::string, int> texToIndex;
     std::vector<int> materialIndices;
     materialIndices.reserve(m_brushes.size());
@@ -221,10 +223,10 @@ void Editor::save_level() {
         auto it = texToIndex.find(key);
         int matIdx;
         if (it == texToIndex.end()) {
-            VMBMaterial mat;
-            strcpy_s(mat.textureName, sizeof(mat.textureName), ft.texturePath.c_str());
-            mat.uScale = ft.scale.x;
-            mat.vScale = ft.scale.y;
+            VMISMaterial mat;
+            strcpy_s(mat.texturePath, sizeof(mat.texturePath), ft.texturePath.c_str());
+            mat.scaleX = ft.scale.x;
+            mat.scaleY = ft.scale.y;
             mat.rotation = ft.rotation;
             mat.offsetX = ft.offset.x;
             mat.offsetY = ft.offset.y;
@@ -238,9 +240,11 @@ void Editor::save_level() {
         materialIndices.push_back(matIdx);
     }
 
+    // Run CSG with VMISMaterial
     std::vector<CSGPoly> polys = compile_csg(m_brushes, materialIndices, materials);
     LOG_INFO("CSG produced %zu polygons", polys.size());
 
+    // Convert to Vertex + indices
     std::vector<Vertex> bakedVerts;
     std::vector<uint32_t> bakedIndices;
     bakedVerts.reserve(polys.size() * 3);
@@ -267,20 +271,7 @@ void Editor::save_level() {
         }
     }
 
-    std::vector<VMISMaterial> vmisMats;
-    vmisMats.reserve(materials.size());
-    for (const auto& mb : materials) {
-        VMISMaterial vm;
-        strcpy_s(vm.texturePath, sizeof(vm.texturePath), mb.textureName);
-        vm.scaleX = mb.uScale;
-        vm.scaleY = mb.vScale;
-        vm.offsetX = mb.offsetX;
-        vm.offsetY = mb.offsetY;
-        vm.rotation = mb.rotation;
-        vm.worldLocked = mb.worldLocked;
-        vmisMats.push_back(vm);
-    }
-
+    // Physics triangles
     std::vector<Triangle> physTris;
     physTris.reserve(bakedIndices.size() / 3);
     for (size_t i = 0; i < bakedIndices.size(); i += 3) {
@@ -291,12 +282,13 @@ void Editor::save_level() {
         physTris.push_back(tri);
     }
 
+    // Write VMIS using the already built materials
     const char* levelPath = m_level->get_level_path();
     if (!levelPath || !levelPath[0]) {
         LOG_ERROR("No level path set; cannot save.");
         return;
     }
-    if (!write_vmis(levelPath, m_brushes, bakedVerts, bakedIndices, vmisMats, physTris, {})) {
+    if (!write_vmis(levelPath, m_brushes, bakedVerts, bakedIndices, materials, physTris, {})) {
         LOG_ERROR("Save failed.");
         return;
     }
