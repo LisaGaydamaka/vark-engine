@@ -377,11 +377,6 @@ void Editor::on_mouse_move(int dx, int dy, bool leftDown, bool middleDown, bool 
     }
 }
 
-void Editor::on_mouse_button(int button, bool pressed) {
-    // Not used; we rely on the flags passed to on_mouse_move.
-    (void)button; (void)pressed;
-}
-
 void Editor::on_mouse_wheel(int delta) {
     m_editorCamera.zoom((float)delta);
 }

@@ -66,7 +66,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_clickX = GET_X_LPARAM(lParam);
             g_clickY = GET_Y_LPARAM(lParam);
             g_clickValid = true;
-            g_editor.on_mouse_button(0, true);
             return 0;
         }
         case WM_LBUTTONUP: {
@@ -83,7 +82,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 }
             }
             g_clickValid = false;
-            g_editor.on_mouse_button(0, false);
             return 0;
         }
         case WM_CHAR: {

@@ -57,6 +57,3 @@ Mat4 mat4_rotation_z(float angle);
 Mat4 mat4_rotation_x(float angle);
 Mat4 mat4_rotation_y(float angle);
 Mat4 mat4_perspective(float fov, float aspect, float nearZ, float farZ);
-
-// ---- Triangle distance ----
-float distSqPointTriangle(const Vec3& p, const Vec3& a, const Vec3& b, const Vec3& c);

@@ -16,4 +16,3 @@ void platform_pump_messages(PlatformState* state);
 bool platform_should_close(const PlatformState* state);
 void platform_destroy_window(PlatformState* state);
 void platform_set_resize_callback(PlatformState* state, void (*callback)(int, int));
-void platform_set_engine(class Engine* engine);

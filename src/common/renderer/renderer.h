@@ -14,7 +14,6 @@ public:
     void begin_frame();
     void end_frame();
     
-    void draw_cube();
     void set_transform(const Mat4& mvp);
     void draw_vertices(ID3D11Buffer* vertexBuffer, int vertexCount, D3D11_PRIMITIVE_TOPOLOGY topology);
     void draw_lines(ID3D11Buffer* vertexBuffer, int vertexCount);

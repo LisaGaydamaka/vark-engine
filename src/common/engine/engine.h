@@ -38,12 +38,6 @@ public:
     void toggle_pause();
     bool is_paused() const { return m_paused; }
 
-    int get_mouse_wheel_delta() {
-        int val = platform.mouseWheelDelta;
-        platform.mouseWheelDelta = 0;
-        return val;
-    }
-
     void lock_mouse(bool lock);
     bool is_mouse_locked() const { return m_mouseLocked; }
 

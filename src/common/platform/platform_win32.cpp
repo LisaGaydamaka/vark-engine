@@ -163,8 +163,3 @@ void platform_set_resize_callback(PlatformState* state, void (*callback)(int, in
 {
     state->onResize = callback;
 }
-
-void platform_set_engine(Engine* engine)
-{
-    // Not used; we use state->userData.
-}

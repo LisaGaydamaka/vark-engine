@@ -109,7 +109,6 @@ void Engine::set_game(std::unique_ptr<IGame> game)
 // ---- Initialization ----
 bool Engine::initialize()
 {
-    globalAllocator.init(1024 * 1024);
     Logger::instance().init();
 
     // ---- 1. Load settings ----
@@ -176,7 +175,6 @@ void Engine::shutdown()
     lock_mouse(false);
     renderer.shutdown();
     platform_destroy_window(&platform);
-    globalAllocator.shutdown();
 }
 
 // ---- Mouse delta ----

@@ -246,43 +246,6 @@ bool Renderer::initialize(HWND hwnd, int width, int height)
     vsBlob->Release();
     psBlob->Release();
 
-    // ---- Cube vertex buffer (example) ----
-    struct VertexSimple { float x, y, z; float r, g, b; };
-    VertexSimple vertices[] = {
-        { -1.0f, -1.0f,  1.0f,  1.0f, 0.0f, 0.0f },
-        {  1.0f, -1.0f,  1.0f,  0.0f, 1.0f, 0.0f },
-        {  1.0f,  1.0f,  1.0f,  0.0f, 0.0f, 1.0f },
-        { -1.0f,  1.0f,  1.0f,  1.0f, 1.0f, 0.0f },
-        { -1.0f, -1.0f, -1.0f,  0.0f, 1.0f, 1.0f },
-        {  1.0f, -1.0f, -1.0f,  1.0f, 0.0f, 1.0f },
-        {  1.0f,  1.0f, -1.0f,  1.0f, 1.0f, 1.0f },
-        { -1.0f,  1.0f, -1.0f,  0.5f, 0.5f, 0.5f }
-    };
-    D3D11_BUFFER_DESC vBufferDesc = {};
-    vBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    vBufferDesc.ByteWidth = sizeof(vertices);
-    vBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    D3D11_SUBRESOURCE_DATA vData = {};
-    vData.pSysMem = vertices;
-    device->CreateBuffer(&vBufferDesc, &vData, vertexBuffer.GetAddressOf());
-
-    // ---- Index buffer (example) ----
-    unsigned short indices[] = {
-        0,1,2, 2,3,0,
-        4,6,5, 4,7,6,
-        0,4,5, 5,1,0,
-        3,2,6, 6,7,3,
-        3,7,4, 4,0,3,
-        1,5,6, 6,2,1
-    };
-    D3D11_BUFFER_DESC iBufferDesc = {};
-    iBufferDesc.Usage = D3D11_USAGE_DEFAULT;
-    iBufferDesc.ByteWidth = sizeof(indices);
-    iBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
-    D3D11_SUBRESOURCE_DATA iData = {};
-    iData.pSysMem = indices;
-    device->CreateBuffer(&iBufferDesc, &iData, indexBuffer.GetAddressOf());
-
     // ---- Constant Buffer ----
     D3D11_BUFFER_DESC constBufferDesc = {};
     constBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
@@ -539,19 +502,6 @@ void Renderer::set_texture(void* textureView)
 {
     ID3D11ShaderResourceView* tex = textureView ? (ID3D11ShaderResourceView*)textureView : m_defaultTextureView.Get();
     context->PSSetShaderResources(0, 1, &tex);
-}
-
-void Renderer::draw_cube()
-{
-    UINT stride = 24;
-    UINT offset = 0;
-    context->IASetVertexBuffers(0, 1, vertexBuffer.GetAddressOf(), &stride, &offset);
-    context->IASetIndexBuffer(indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
-    context->IASetInputLayout(inputLayout.Get());
-    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    context->VSSetShader(vertexShader.Get(), nullptr, 0);
-    context->PSSetShader(pixelShader.Get(), nullptr, 0);
-    context->DrawIndexed(36, 0, 0);
 }
 
 void Renderer::draw_vertices(ID3D11Buffer* vertexBuffer, int vertexCount, D3D11_PRIMITIVE_TOPOLOGY topology)

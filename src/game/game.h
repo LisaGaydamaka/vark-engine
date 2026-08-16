@@ -17,7 +17,6 @@ public:
     void on_editor_mode(bool enabled) override;
 
 private:
-    void process_input(float dt);
     void update_wireframe();
 
     Engine* m_engine = nullptr;
