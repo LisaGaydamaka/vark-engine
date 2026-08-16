@@ -383,6 +383,38 @@ bool Renderer::initialize(HWND hwnd, int width, int height)
     device->CreatePixelShader(linePSBlob->GetBufferPointer(), linePSBlob->GetBufferSize(), nullptr, linePixelShader.GetAddressOf());
     linePSBlob->Release();
 
+
+    const char* lineVSCode = R"(
+        cbuffer MatrixBuffer : register(b0) {
+            row_major matrix mvp;
+        };
+        struct VSInput {
+            float3 pos : POSITION;
+            float3 color : COLOR;
+        };
+        struct VSOutput {
+            float4 pos : SV_POSITION;
+            float3 color : COLOR;
+        };
+        VSOutput main(VSInput input) {
+            VSOutput output;
+            output.pos = mul(float4(input.pos, 1.0f), mvp);
+            output.color = input.color;
+            return output;
+        }
+    )";
+    ID3DBlob* lineVSBlob = nullptr;
+    if (!compile_shader(lineVSCode, "main", "vs_4_0", &lineVSBlob)) return false;
+    device->CreateVertexShader(lineVSBlob->GetBufferPointer(), lineVSBlob->GetBufferSize(), nullptr, lineVertexShader.GetAddressOf());
+
+    D3D11_INPUT_ELEMENT_DESC lineLayoutDesc[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+    };
+    device->CreateInputLayout(lineLayoutDesc, 2, lineVSBlob->GetBufferPointer(), lineVSBlob->GetBufferSize(), lineInputLayout.GetAddressOf());
+    lineVSBlob->Release();
+
+
     LOG_INFO("Renderer initialization complete.");
     return true;
 }
@@ -517,15 +549,16 @@ void Renderer::draw_vertices(ID3D11Buffer* vertexBuffer, int vertexCount, D3D11_
     context->Draw(vertexCount, 0);
 }
 
-void Renderer::draw_lines(ID3D11Buffer* vertexBuffer, int vertexCount)
-{
+void Renderer::draw_lines(ID3D11Buffer* vertexBuffer, int vertexCount) {
     if (!vertexBuffer || vertexCount == 0) return;
 
-    context->IASetInputLayout(inputLayout.Get());
+    // Use dedicated line shaders
+    context->IASetInputLayout(lineInputLayout.Get());
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_LINELIST);
-    context->VSSetShader(vertexShader.Get(), nullptr, 0);
+    context->VSSetShader(lineVertexShader.Get(), nullptr, 0);
     context->PSSetShader(linePixelShader.Get(), nullptr, 0);
 
+    // Unbind textures/samplers (not needed for lines)
     context->PSSetShaderResources(0, 0, nullptr);
     context->PSSetSamplers(0, 0, nullptr);
 
@@ -534,7 +567,7 @@ void Renderer::draw_lines(ID3D11Buffer* vertexBuffer, int vertexCount)
     }
     context->OMSetBlendState(nullptr, nullptr, 0xffffffff);
 
-    UINT stride = sizeof(Vertex);
+    UINT stride = sizeof(Vertex);  // 32 bytes: pos(12) + uv(8) + color(12)
     UINT offset = 0;
     context->IASetVertexBuffers(0, 1, &vertexBuffer, &stride, &offset);
     context->Draw(vertexCount, 0);

@@ -68,4 +68,6 @@ private:
 
     // ---- Line pipeline ----
     ComPtr<ID3D11PixelShader> linePixelShader;
+    ComPtr<ID3D11VertexShader> lineVertexShader;
+    ComPtr<ID3D11InputLayout> lineInputLayout;
 };

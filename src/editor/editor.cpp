@@ -101,7 +101,7 @@ void Editor::rebuild_wireframe_buffer() {
 
     for (size_t i = 0; i < m_brushes.size(); ++i) {
         const auto& b = m_brushes[i];
-        Vec3 color = (i == (size_t)m_selectedIndex) ? Vec3{1.0f, 1.0f, 0.0f} : Vec3{0.0f, 1.0f, 0.0f};
+        Vec3 color = (i == (size_t)m_selectedIndex) ? Vec3{0.0f, 1.0f, 0.0f} : Vec3{0.0f, 0.0f, 0.0f};
         if (b.shape == ShapeType::Box) {
             generate_box_wireframe(b.center, b.size, color, lineVerts);
         } else {
