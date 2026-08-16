@@ -15,6 +15,7 @@ public:
         PosX, PosY, PosZ,
         SizeX, SizeY, SizeZ
     };
+
     EditorUI(Editor* editor, UIRenderer* ui);
     ~EditorUI() = default;
 
@@ -28,20 +29,31 @@ public:
     bool on_text_input(char c);
 
 private:
-    
-
+    // Drawing helpers
+    void draw_top_menu();
     void draw_brush_list();
-    void draw_properties();
-    void draw_edit_field(const char* label, float value, EditField field, float& y);
+    void draw_inspector();
 
-    bool is_point_in_rect(int x, int y, float rx, float ry, float rw, float rh) const;
+    // Layout constants
+    static constexpr int TOP_MENU_HEIGHT = 30;
+    static constexpr int LEFT_PANEL_WIDTH = 220;
+    static constexpr int RIGHT_PANEL_WIDTH = 280;
+
+    // Click detection helpers
+    bool hit_test_rect(int x, int y, float rx, float ry, float rw, float rh) const;
 
     Editor* m_editor;
     UIRenderer* m_ui;
+
     const std::vector<Brush>* m_brushes = nullptr;
-    int m_selectedIndex = -1;
+    std::vector<int> m_sortedIndices;   // indices sorted by brush.time
+    int m_selectedIndex = -1;           // original index in m_brushes
 
     // Edit state
     EditField m_editField = EditField::None;
     std::string m_editBuffer;
+
+    // Menu state (simple)
+    enum class Menu { None, File, Edit, Build };
+    Menu m_activeMenu = Menu::None;
 };

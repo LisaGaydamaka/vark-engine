@@ -397,3 +397,8 @@ void Editor::on_key_down(int key, bool ctrl, bool shift) {
 void Editor::on_key_up(int key) {
     // Not needed
 }
+
+void Editor::on_mouse_button(int button, bool pressed) {
+    (void)button; (void)pressed;
+    // Not used; we rely on the flags passed to on_mouse_move.
+}

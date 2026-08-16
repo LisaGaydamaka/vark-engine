@@ -66,6 +66,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_clickX = GET_X_LPARAM(lParam);
             g_clickY = GET_Y_LPARAM(lParam);
             g_clickValid = true;
+            g_editor.on_mouse_button(0, true);
             return 0;
         }
         case WM_LBUTTONUP: {
@@ -82,6 +83,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 }
             }
             g_clickValid = false;
+            g_editor.on_mouse_button(0, false);
             return 0;
         }
         case WM_CHAR: {
@@ -92,7 +94,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_KEYDOWN: {
             bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
             bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
-            // Also pass to UI for potential key handling (e.g., escape to cancel)
             if (!g_editor.get_ui()->on_key_down((int)wParam)) {
                 g_editor.on_key_down((int)wParam, ctrl, shift);
             }
@@ -198,7 +199,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         g_level.render(&g_renderer);
         g_editor.render();
 
-        g_ui.draw_text(10.0f, 10.0f, "Vark Editor | Left=Orbit | Middle=Pan | Wheel=Zoom | Ctrl+S Save | Delete remove", 1.0f, 1.0f, 0.0f, 1.0f);
+        // ---- The help text line has been removed ----
 
         g_renderer.end_frame();
     }
