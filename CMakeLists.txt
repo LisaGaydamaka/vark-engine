@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ---- Manifold library (external CSG library) ----
-add_library(vibe_manifold STATIC
+add_library(vark_manifold STATIC
     external/manifold/src/boolean2.cpp
     external/manifold/src/boolean2_diagnostics.cpp
     external/manifold/src/boolean2_offset.cpp
@@ -31,21 +31,21 @@ add_library(vibe_manifold STATIC
     external/manifold/src/subdivision.cpp
     external/manifold/src/tree2d.cpp
 )
-target_include_directories(vibe_manifold PUBLIC
+target_include_directories(vark_manifold PUBLIC
     external/manifold/include
     external/manifold/src
 )
-target_compile_definitions(vibe_manifold PRIVATE
+target_compile_definitions(vark_manifold PRIVATE
     NOMINMAX
     MANIFOLD_PAR=-1
     _CRT_SECURE_NO_WARNINGS
 )
 if(MSVC)
-    target_compile_options(vibe_manifold PRIVATE /wd4244 /wd4267 /wd4390)
+    target_compile_options(vark_manifold PRIVATE /wd4244 /wd4267 /wd4390)
 endif()
 
 # ---- Common library (core engine systems, no CSG) ----
-add_library(vibe_common STATIC
+add_library(vark_common STATIC
     src/common/core/math.cpp
     src/common/core/memory.cpp
     src/common/core/geometry.cpp
@@ -60,74 +60,74 @@ add_library(vibe_common STATIC
     src/common/engine/engine.cpp
     src/common/physics/physics_world.cpp
 )
-target_compile_definitions(vibe_common PRIVATE NOMINMAX _CRT_SECURE_NO_WARNINGS)
-target_include_directories(vibe_common PUBLIC src/common)
-target_link_libraries(vibe_common PRIVATE d3d11 d3dcompiler windowscodecs)
+target_compile_definitions(vark_common PRIVATE NOMINMAX _CRT_SECURE_NO_WARNINGS)
+target_include_directories(vark_common PUBLIC src/common)
+target_link_libraries(vark_common PRIVATE d3d11 d3dcompiler windowscodecs)
 
 # ---- CSG library (compiler logic) ----
-add_library(vibe_csg STATIC
+add_library(vark_csg STATIC
     src/compiler/csg_solver.cpp
 )
-target_include_directories(vibe_csg PUBLIC
+target_include_directories(vark_csg PUBLIC
     ${CMAKE_SOURCE_DIR}/src/common
     ${CMAKE_SOURCE_DIR}/src/compiler
 )
-target_link_libraries(vibe_csg PRIVATE vibe_common vibe_manifold)
+target_link_libraries(vark_csg PRIVATE vark_common vark_manifold)
 
 # Critical: prevent Windows min/max macros from breaking Manifold
-target_compile_definitions(vibe_csg PRIVATE
+target_compile_definitions(vark_csg PRIVATE
     NOMINMAX
     MANIFOLD_PAR=-1
     _CRT_SECURE_NO_WARNINGS
 )
 
 # ---- Game library ----
-add_library(vibe_game STATIC
+add_library(vark_game STATIC
     src/game/player/player.cpp
     src/game/game.cpp
 )
-target_include_directories(vibe_game PUBLIC src)
-target_link_libraries(vibe_game PRIVATE vibe_common)
+target_include_directories(vark_game PUBLIC src)
+target_link_libraries(vark_game PRIVATE vark_common)
 
 # ---- UI library (2D overlay, shared) ----
-add_library(vibe_ui STATIC
+add_library(vark_ui STATIC
     src/ui/ui_renderer.cpp
 )
-target_compile_definitions(vibe_ui PRIVATE NOMINMAX)
-target_include_directories(vibe_ui PUBLIC src/ui)
-target_link_libraries(vibe_ui PRIVATE d3d11 d3dcompiler)
+target_compile_definitions(vark_ui PRIVATE NOMINMAX)
+target_include_directories(vark_ui PUBLIC src/ui)
+target_link_libraries(vark_ui PRIVATE d3d11 d3dcompiler)
 
 # ---- Editor library (editor logic, uses CSG) ----
-add_library(vibe_editor STATIC
+add_library(vark_editor STATIC
     src/editor/editor.cpp
     src/editor/editor_ui.cpp
     src/editor/editor_camera.cpp   # <-- ADDED
     src/editor/editor_settings.cpp   # <-- add
 )
-target_compile_definitions(vibe_editor PRIVATE NOMINMAX)
-target_include_directories(vibe_editor PUBLIC
+target_compile_definitions(vark_editor PRIVATE NOMINMAX)
+target_include_directories(vark_editor PUBLIC
     src/editor
     src
 )
-target_link_libraries(vibe_editor PRIVATE
-    vibe_common
-    vibe_ui
-    vibe_csg
+target_link_libraries(vark_editor PRIVATE
+    vark_common
+    vark_ui
+    vark_csg
 )
 
 # ---- Engine executable (game) ----
 add_executable(engine_app WIN32 src/apps/engine/main.cpp)
 target_include_directories(engine_app PRIVATE src)
-target_link_libraries(engine_app PRIVATE vibe_common vibe_game)
+target_link_libraries(engine_app PRIVATE vark_common vark_game)
 
 # ---- Editor executable (standalone, no game) ----
 add_executable(editor_app WIN32 src/apps/editor/editor_main.cpp)
 target_include_directories(editor_app PRIVATE src)
 target_link_libraries(editor_app PRIVATE
-    vibe_common
-    vibe_ui
-    vibe_editor
-    vibe_csg
+    vark_common
+    vark_ui
+    vark_editor
+    vark_csg
 )
 
 # ---- Compiler executable (console tool) ----
@@ -138,7 +138,7 @@ target_include_directories(vcompiler PRIVATE
     ${CMAKE_SOURCE_DIR}/src/common
     ${CMAKE_SOURCE_DIR}/src/compiler
 )
-target_link_libraries(vcompiler PRIVATE vibe_csg)
+target_link_libraries(vcompiler PRIVATE vark_csg)
 
 # ---- Copy assets (with directory creation) ----
 add_custom_command(TARGET engine_app POST_BUILD

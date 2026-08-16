@@ -112,9 +112,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     FILE* fDummy;
     freopen_s(&fDummy, "CONOUT$", "w", stdout);
     freopen_s(&fDummy, "CONOUT$", "w", stderr);
-    SetConsoleTitleA("Vibe Editor");
+    SetConsoleTitleA("Vark Editor");
     Logger::instance().init("logs/editor.log");
-    LOG_INFO("=== Vibe Editor ===");
+    LOG_INFO("=== Vark Editor ===");
 
     // Load editor settings
     EditorSettings settings;
@@ -128,13 +128,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     WNDCLASSA wc = {};
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
-    wc.lpszClassName = "VibeEditorClass";
+    wc.lpszClassName = "VarkEditorClass";
     if (!RegisterClassA(&wc)) {
         LOG_ERROR("Failed to register window class");
         return -1;
     }
 
-    g_hwnd = CreateWindowExA(0, "VibeEditorClass", "Vibe Editor",
+    g_hwnd = CreateWindowExA(0, "VarkEditorClass", "Vark Editor",
                              WS_OVERLAPPEDWINDOW | WS_VISIBLE,
                              CW_USEDEFAULT, CW_USEDEFAULT,
                              width, height,
@@ -200,7 +200,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         g_level.render(&g_renderer);
         g_editor.render();
 
-        g_ui.draw_text(10.0f, 10.0f, "Vibe Editor | Left=Orbit | Middle=Pan | Wheel=Zoom | Ctrl+S Save | Delete remove", 1.0f, 1.0f, 0.0f, 1.0f);
+        g_ui.draw_text(10.0f, 10.0f, "Vark Editor | Left=Orbit | Middle=Pan | Wheel=Zoom | Ctrl+S Save | Delete remove", 1.0f, 1.0f, 0.0f, 1.0f);
 
         g_renderer.end_frame();
     }

@@ -127,7 +127,7 @@ bool Engine::initialize()
     if (!platform_create_window(&platform,
                                 m_settings.windowWidth,
                                 m_settings.windowHeight,
-                                "Vibe Engine",
+                                "Vark Engine",
                                 m_settings.fullscreen)) {
         LOG_ERROR("Failed to create window!");
         return false;

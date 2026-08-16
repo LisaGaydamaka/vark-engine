@@ -6,7 +6,7 @@
 #include <iostream>
 
 void print_usage() {
-    printf("Vibe Engine CSG Rebake Tool\n");
+    printf("Vark Engine CSG Rebake Tool\n");
     printf("Usage:\n");
     printf("  vcompiler <input.vmis>\n");
     printf("  Reads the .vmis file, re-runs CSG on its brushes, and overwrites the baked mesh.\n");
@@ -27,7 +27,7 @@ bool rebake_file(const std::string& vmisPath) {
 }
 
 int main(int argc, char** argv) {
-    printf("=== Vibe Engine CSG Rebake Tool ===\n");
+    printf("=== Vark Engine CSG Rebake Tool ===\n");
 
     if (argc >= 2) {
         const char* vmisPath = argv[1];

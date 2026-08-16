@@ -1,0 +1,61 @@
+vark-engine/
+├── assets/
+│   ├── levels/
+│   │   └── test.vmis
+│   └── textures/
+│       ├── brick.jpg
+│       └── zebra.png
+├── build/                         (generated)
+├── CMakeLists.txt
+├── external/
+│   └── manifold/                  (CSG library)
+│       ├── include/
+│       └── src/
+├── src/
+│   ├── apps/
+│   │   ├── engine/
+│   │   │   └── main.cpp           # Engine launcher
+│   │   └── editor/
+│   │       └── editor_main.cpp    # Editor launcher
+│   ├── common/
+│   │   ├── core/
+│   │   │   ├── math.cpp/h
+│   │   │   ├── memory.cpp/h
+│   │   │   ├── geometry.cpp/h
+│   │   │   ├── camera.cpp/h
+│   │   │   ├── font.cpp/h
+│   │   │   ├── settings.cpp/h
+│   │   │   └── logger.cpp/h
+│   │   ├── engine/
+│   │   │   ├── engine.cpp/h
+│   │   │   └── game_interface.h
+│   │   ├── platform/
+│   │   │   ├── platform.h
+│   │   │   └── platform_win32.cpp
+│   │   ├── renderer/
+│   │   │   ├── renderer.h
+│   │   │   └── renderer_d3d11.cpp
+│   │   ├── physics/
+│   │   │   ├── physics_world.cpp/h
+│   │   │   └── physics_profile.h
+│   │   └── world/
+│   │       ├── level.cpp/h
+│   │       ├── vmis_format.h
+│   │       └── vmis_io.cpp/h
+│   ├── compiler/
+│   │   ├── main.cpp
+│   │   ├── csg_solver.cpp/h
+│   │   └── csg_types.h
+│   ├── editor/
+│   │   ├── editor.cpp/h
+│   │   ├── editor_camera.cpp/h
+│   │   ├── editor_ui.cpp/h
+│   │   └── editor_settings.cpp/h
+│   ├── game/
+│   │   ├── game.cpp/h
+│   │   └── player/
+│   │       ├── player.cpp/h
+│   │       └── physics_profile.h
+│   └── ui/
+│       ├── ui_renderer.cpp/h
+└── .gitignore

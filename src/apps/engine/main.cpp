@@ -18,8 +18,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     FILE* fDummy;
     freopen_s(&fDummy, "CONOUT$", "w", stdout);
     freopen_s(&fDummy, "CONOUT$", "w", stderr);
-    SetConsoleTitleA("Vibe Engine - Debug Console");
-    LOG_INFO("=== Vibe Engine ===");
+    SetConsoleTitleA("Vark Engine - Debug Console");
+    LOG_INFO("=== Vark Engine ===");
 
     Engine engine;
 

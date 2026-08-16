@@ -29,8 +29,8 @@ struct Brush {
 
 class Level {
 public:
-    bool load_vm(const char* filepath);
-    bool save_vm(const char* filepath);
+    // bool load_vm(const char* filepath);
+    // bool save_vm(const char* filepath);
     void add_brush(const Brush& brush);
 
     bool build(Renderer* renderer, const char* levelPath = nullptr);

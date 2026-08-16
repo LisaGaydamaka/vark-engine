@@ -61,7 +61,7 @@ bool platform_create_window(PlatformState* state, int width, int height, const c
     WNDCLASSA wc = {};
     wc.lpfnWndProc = window_proc;
     wc.hInstance = instance;
-    wc.lpszClassName = "VibeEngineWindowClass";
+    wc.lpszClassName = "VarkEngineWindowClass";
 
     if (!RegisterClassA(&wc))
         return false;
@@ -78,7 +78,7 @@ bool platform_create_window(PlatformState* state, int width, int height, const c
 
         hwnd = CreateWindowExA(
             0,
-            "VibeEngineWindowClass",
+            "VarkEngineWindowClass",
             title,
             style,
             0, 0,                     // top-left corner
@@ -103,7 +103,7 @@ bool platform_create_window(PlatformState* state, int width, int height, const c
 
         hwnd = CreateWindowExA(
             0,
-            "VibeEngineWindowClass",
+            "VarkEngineWindowClass",
             title,
             style,
             CW_USEDEFAULT, CW_USEDEFAULT,

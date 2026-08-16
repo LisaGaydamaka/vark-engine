@@ -168,7 +168,7 @@ bool Settings::save(const char* filepath) const
     if (!file.is_open())
         return false;
 
-    file << "# Vibe Engine Settings\n\n";
+    file << "# Vark Engine Settings\n\n";
     file << "[Display]\n";
     file << "WindowWidth = " << windowWidth << "\n";
     file << "WindowHeight = " << windowHeight << "\n";

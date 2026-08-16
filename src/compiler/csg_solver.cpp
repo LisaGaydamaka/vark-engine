@@ -116,7 +116,7 @@ void export_OBJ(const std::vector<CSGPoly>& polys, const char* path) {
         return;
     }
 
-    fprintf(f, "# Exported from Vibe Engine CSG\n");
+    fprintf(f, "# Exported from Vark Engine CSG\n");
     fprintf(f, "o CSGResult\n");
 
     std::vector<Vec3> positions;

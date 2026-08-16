@@ -11,7 +11,7 @@ enum class LogLevel {
 class Logger {
 public:
     static Logger& instance();
-    void init(const char* logFilePath = "logs/vibe.log");
+    void init(const char* logFilePath = "logs/vark.log");
     void log(LogLevel level, const char* format, ...);
     void shutdown();
 
