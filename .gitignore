@@ -1,0 +1,7 @@
+build/
+.vs/
+.vscode/
+*.exe
+*.pdb
+*.ilk
+*.user
