@@ -32,6 +32,14 @@ public:
         }
     }
 
+    void layout() override {
+        for (auto& child : m_children) {
+            const UIRect& rel = child->get_relative_rect();
+            child->set_rect(m_rect.x + rel.x, m_rect.y + rel.y, rel.w, rel.h);
+            child->layout();
+        }
+    }
+
 private:
     float m_bgR = 0.1f, m_bgG = 0.1f, m_bgB = 0.2f, m_bgA = 1.0f;
     float m_borderR = 0.5f, m_borderG = 0.5f, m_borderB = 0.5f, m_borderA = 0.0f;

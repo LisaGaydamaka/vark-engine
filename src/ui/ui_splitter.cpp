@@ -1,120 +1,128 @@
 #include "ui_splitter.h"
+#include "ui_renderer.h"
+#include "../common/core/logger.h"
+#include <windows.h>
 #include <algorithm>
 
-UISplitter::UISplitter(SplitterOrientation orientation)
-    : m_orientation(orientation) {}
+extern HWND g_hwnd;  // declared in editor_main.cpp
 
-void UISplitter::set_first(std::unique_ptr<UIWidget> widget) {
-    m_first = std::move(widget);
-    if (m_first) m_first->m_parent = this;
-}
-
-void UISplitter::set_second(std::unique_ptr<UIWidget> widget) {
-    m_second = std::move(widget);
-    if (m_second) m_second->m_parent = this;
-}
+UISplitter::UISplitter(Orientation orient)
+    : m_orientation(orient) {}
 
 void UISplitter::set_ratio(float ratio) {
-    m_ratio = std::clamp(ratio, 0.05f, 0.95f);
-}
-
-float UISplitter::get_handle_position() const {
-    if (m_orientation == SplitterOrientation::Horizontal) {
-        return m_rect.x + m_rect.w * m_ratio;
-    } else {
-        return m_rect.y + m_rect.h * m_ratio;
-    }
-}
-
-bool UISplitter::is_over_handle(float x, float y) const {
-    float pos = get_handle_position();
-    float half = m_handleSize * 0.5f;
-    if (m_orientation == SplitterOrientation::Horizontal) {
-        return x >= pos - half && x <= pos + half && y >= m_rect.y && y <= m_rect.y + m_rect.h;
-    } else {
-        return y >= pos - half && y <= pos + half && x >= m_rect.x && x <= m_rect.x + m_rect.w;
-    }
+    m_ratio = std::max(0.0f, std::min(1.0f, ratio));
+    update_child_rects();
 }
 
 void UISplitter::layout() {
-    if (!m_first || !m_second) return;
+    if (m_children.size() < 2) {
+        if (m_children.size() == 1) {
+            m_children[0]->set_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h);
+        }
+        return;
+    }
+    update_child_rects();
+    for (auto& child : m_children) {
+        child->layout();  // let children layout themselves
+    }
+}
 
+void UISplitter::update_child_rects() {
+    if (m_children.size() < 2) return;
     float x = m_rect.x;
     float y = m_rect.y;
     float w = m_rect.w;
     float h = m_rect.h;
+    float handle = m_handleSize;
 
-    if (m_orientation == SplitterOrientation::Horizontal) {
-        float splitX = x + w * m_ratio;
-        float handleHalf = m_handleSize * 0.5f;
-        // First widget occupies from x to splitX - handleHalf
-        m_first->set_rect(x, y, splitX - x - handleHalf, h);
-        // Second widget occupies from splitX + handleHalf to x+w
-        m_second->set_rect(splitX + handleHalf, y, x + w - splitX - handleHalf, h);
-    } else { // Vertical
-        float splitY = y + h * m_ratio;
-        float handleHalf = m_handleSize * 0.5f;
-        m_first->set_rect(x, y, w, splitY - y - handleHalf);
-        m_second->set_rect(x, splitY + handleHalf, w, y + h - splitY - handleHalf);
+    UIWidget* first = m_children[0].get();
+    UIWidget* second = m_children[1].get();
+
+    if (m_orientation == Orientation::Vertical) {
+        float firstW = (w - handle) * m_ratio;
+        float secondW = w - handle - firstW;
+        first->set_rect(x, y, firstW, h);
+        second->set_rect(x + firstW + handle, y, secondW, h);
+    } else {
+        float firstH = (h - handle) * m_ratio;
+        float secondH = h - handle - firstH;
+        first->set_rect(x, y, w, firstH);
+        second->set_rect(x, y + firstH + handle, w, secondH);
     }
-
-    // Layout children (if they have their own layouts)
-    m_first->layout_all();
-    m_second->layout_all();
 }
 
 void UISplitter::render(UIRenderer* ui) {
-    // Draw handle
-    float pos = get_handle_position();
-    float half = m_handleSize * 0.5f;
-    if (m_orientation == SplitterOrientation::Horizontal) {
-        ui->draw_rect(pos - half, m_rect.y, m_handleSize, m_rect.h, 0.4f, 0.4f, 0.4f, 1.0f);
-        // Draw grip dots (optional)
-        for (float y = m_rect.y + 10; y < m_rect.y + m_rect.h - 10; y += 8) {
-            ui->draw_rect(pos - 1, y, 2, 2, 0.7f, 0.7f, 0.7f, 1.0f);
-        }
-    } else {
-        ui->draw_rect(m_rect.x, pos - half, m_rect.w, m_handleSize, 0.4f, 0.4f, 0.4f, 1.0f);
-        for (float x = m_rect.x + 10; x < m_rect.x + m_rect.w - 10; x += 8) {
-            ui->draw_rect(x, pos - 1, 2, 2, 0.7f, 0.7f, 0.7f, 1.0f);
-        }
-    }
+    float x = m_rect.x;
+    float y = m_rect.y;
+    float w = m_rect.w;
+    float h = m_rect.h;
+    float handle = m_handleSize;
 
-    // Render children
-    if (m_first) m_first->render_all(ui);
-    if (m_second) m_second->render_all(ui);
+    if (m_orientation == Orientation::Vertical) {
+        float handleX = x + (w - handle) * m_ratio;
+        ui->draw_rect(handleX, y, handle, h, 0.3f, 0.3f, 0.3f, 1.0f);
+        ui->draw_rect(handleX, y, 1.0f, h, 0.5f, 0.5f, 0.5f, 1.0f);
+        ui->draw_rect(handleX + handle - 1.0f, y, 1.0f, h, 0.5f, 0.5f, 0.5f, 1.0f);
+    } else {
+        float handleY = y + (h - handle) * m_ratio;
+        ui->draw_rect(x, handleY, w, handle, 0.3f, 0.3f, 0.3f, 1.0f);
+        ui->draw_rect(x, handleY, w, 1.0f, 0.5f, 0.5f, 0.5f, 1.0f);
+        ui->draw_rect(x, handleY + handle - 1.0f, w, 1.0f, 0.5f, 0.5f, 0.5f, 1.0f);
+    }
 }
 
 bool UISplitter::on_mouse_down(float x, float y, int button) {
-    if (button == 0 && is_over_handle(x, y)) {
+    if (button != 0) return false;
+
+    float handleX, handleY, handleW, handleH;
+    if (m_orientation == Orientation::Vertical) {
+        handleX = m_rect.x + (m_rect.w - m_handleSize) * m_ratio;
+        handleY = m_rect.y;
+        handleW = m_handleSize;
+        handleH = m_rect.h;
+    } else {
+        handleX = m_rect.x;
+        handleY = m_rect.y + (m_rect.h - m_handleSize) * m_ratio;
+        handleW = m_rect.w;
+        handleH = m_handleSize;
+    }
+    if (x >= handleX && x <= handleX + handleW &&
+        y >= handleY && y <= handleY + handleH) {
         m_dragging = true;
-        m_dragStartPos = (m_orientation == SplitterOrientation::Horizontal) ? x : y;
-        m_dragStartRatio = m_ratio;
+        SetCapture(g_hwnd);
         return true;
     }
-    // Pass event to children? Not necessary for splitter.
     return false;
 }
 
 bool UISplitter::on_mouse_up(float x, float y, int button) {
     if (button == 0 && m_dragging) {
         m_dragging = false;
+        ReleaseCapture();
         return true;
     }
     return false;
 }
 
 bool UISplitter::on_mouse_move(float x, float y) {
-    if (m_dragging) {
-        float pos = (m_orientation == SplitterOrientation::Horizontal) ? x : y;
-        float delta = pos - m_dragStartPos;
-        float total = (m_orientation == SplitterOrientation::Horizontal) ? m_rect.w : m_rect.h;
-        if (total > 0) {
-            float newRatio = m_dragStartRatio + delta / total;
-            set_ratio(newRatio);
-            // Trigger re-layout (will happen next frame)
+    if (!m_dragging) return false;
+
+    if (m_orientation == Orientation::Vertical) {
+        float relX = x - m_rect.x;
+        float maxX = m_rect.w - m_handleSize;
+        if (maxX > 0) {
+            m_ratio = std::max(0.0f, std::min(1.0f, relX / maxX));
         }
-        return true;
+    } else {
+        float relY = y - m_rect.y;
+        float maxY = m_rect.h - m_handleSize;
+        if (maxY > 0) {
+            m_ratio = std::max(0.0f, std::min(1.0f, relY / maxY));
+        }
     }
-    return false;
+    update_child_rects();
+    if (m_onResize) {
+        m_onResize(m_ratio);
+    }
+    return true;
 }

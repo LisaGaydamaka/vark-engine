@@ -16,8 +16,10 @@
 #include "ui/ui_label.h"
 #include "ui/ui_panel.h"
 #include "ui/ui_button.h"
+#include "ui/ui_splitter.h"
 
-static HWND g_hwnd = nullptr;
+HWND g_hwnd = nullptr;   // global, accessible to ui_splitter.cpp
+
 static Renderer g_renderer;
 static Level g_level;
 static UIRenderer g_ui;
@@ -186,34 +188,44 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     g_editor.sync_brushes();
 
-    // ---- Step 4: Panel + Button test (with fixed positions) ----
+    // ---- Step 5: Splitter test with visible content ----
     g_uiRoot = std::make_unique<UIRoot>();
 
-    auto panel = std::make_unique<UIPanel>();
-    panel->set_rect(10.0f, 60.0f, 200.0f, 100.0f);
-    panel->set_background(0.2f, 0.2f, 0.3f, 1.0f);
-    panel->set_border(0.6f, 0.6f, 0.8f, 1.0f, 2.0f);
+    auto splitter = std::make_unique<UISplitter>(UISplitter::Orientation::Vertical);
+    splitter->set_rect(10.0f, 60.0f, 600.0f, 300.0f);
+    splitter->set_ratio(0.4f);
 
-    // Position button and label inside the panel
-    auto button = std::make_unique<UIButton>("Click Me");
-    button->set_rect(panel->get_rect().x + 20.0f, panel->get_rect().y + 20.0f, 80.0f, 30.0f);
+    // Left panel
+    auto leftPanel = std::make_unique<UIPanel>();
+    leftPanel->set_background(0.3f, 0.1f, 0.1f, 1.0f);
+    leftPanel->set_border(0.8f, 0.2f, 0.2f, 1.0f, 2.0f);
 
-    auto clickLabel = std::make_unique<UILabel>("Clicks: 0", 1.0f, 1.0f, 0.0f, 1.0f);
-    clickLabel->set_rect(panel->get_rect().x + 20.0f, panel->get_rect().y + 60.0f, 100.0f, 20.0f);
+    auto leftLabel = std::make_unique<UILabel>("Left Panel", 1.0f, 1.0f, 1.0f, 1.0f);
+    leftLabel->set_relative_rect(10.0f, 10.0f, 100.0f, 20.0f);  // relative to panel
+    leftPanel->add_child(std::move(leftLabel));
 
-    UILabel* labelPtr = clickLabel.get();
-    int clickCount = 0;
+    auto leftButton = std::make_unique<UIButton>("Click Left");
+    leftButton->set_relative_rect(10.0f, 40.0f, 80.0f, 25.0f);
+    leftButton->set_on_click([]() { LOG_INFO("Left button clicked!"); });
+    leftPanel->add_child(std::move(leftButton));
 
-    button->set_on_click([labelPtr, &clickCount]() {
-        clickCount++;
-        char buf[32];
-        snprintf(buf, sizeof(buf), "Clicks: %d", clickCount);
-        labelPtr->set_text(buf);
-    });
+    // Right panel
+    auto rightPanel = std::make_unique<UIPanel>();
+    rightPanel->set_background(0.1f, 0.1f, 0.3f, 1.0f);
+    rightPanel->set_border(0.2f, 0.2f, 0.8f, 1.0f, 2.0f);
 
-    panel->add_child(std::move(button));
-    panel->add_child(std::move(clickLabel));
-    g_uiRoot->add_child(std::move(panel));
+    auto rightLabel = std::make_unique<UILabel>("Right Panel", 1.0f, 1.0f, 1.0f, 1.0f);
+    rightLabel->set_relative_rect(10.0f, 10.0f, 100.0f, 20.0f);
+    rightPanel->add_child(std::move(rightLabel));
+
+    auto rightButton = std::make_unique<UIButton>("Click Right");
+    rightButton->set_relative_rect(10.0f, 40.0f, 80.0f, 25.0f);
+    rightButton->set_on_click([]() { LOG_INFO("Right button clicked!"); });
+    rightPanel->add_child(std::move(rightButton));
+
+    splitter->add_child(std::move(leftPanel));
+    splitter->add_child(std::move(rightPanel));
+    g_uiRoot->add_child(std::move(splitter));
 
     MSG msg = {};
 
@@ -243,13 +255,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         // ---- Disable 3D and old UI ----
         // g_level.render(&g_renderer);
         // g_editor.render();
-
-        // ---- Clipping test ----
-        g_ui.draw_rect(0.0f, 0.0f, (float)curWidth, (float)curHeight, 1.0f, 0.0f, 0.0f, 0.5f);
-        g_ui.push_clip_rect(50.0f, 50.0f, 100.0f, 100.0f);
-        g_ui.draw_rect(0.0f, 0.0f, (float)curWidth, (float)curHeight, 0.0f, 1.0f, 0.0f, 0.7f);
-        g_ui.pop_clip_rect();
-        g_ui.draw_text(10.0f, 10.0f, "CLIP TEST: Red background, green clipped to (50,50)-(150,150)", 1.0f, 1.0f, 1.0f, 1.0f);
 
         // ---- Render UI root ----
         if (g_uiRoot) {

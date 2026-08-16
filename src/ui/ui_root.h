@@ -17,6 +17,10 @@ public:
     bool on_key_down(int key, bool ctrl, bool shift) override;
     bool on_char(char c) override;
 
+    void set_mouse_capture(UIWidget* widget) { m_captureWidget = widget; }
+    void release_mouse_capture() { m_captureWidget = nullptr; }
+
 private:
     UIWidget* find_widget_at(float x, float y);
+    UIWidget* m_captureWidget = nullptr;
 };

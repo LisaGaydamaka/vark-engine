@@ -17,8 +17,13 @@ public:
     UIWidget() = default;
     virtual ~UIWidget() = default;
 
+    // Absolute rect (used for rendering and hit testing)
     void set_rect(float x, float y, float w, float h) { m_rect = {x, y, w, h}; }
     const UIRect& get_rect() const { return m_rect; }
+
+    // Relative rect (used for layout inside parent)
+    void set_relative_rect(float x, float y, float w, float h) { m_relativeRect = {x, y, w, h}; }
+    const UIRect& get_relative_rect() const { return m_relativeRect; }
 
     UIWidget* get_parent() const { return m_parent; }
     void add_child(std::unique_ptr<UIWidget> child);
@@ -42,6 +47,7 @@ public:
 
 protected:
     UIRect m_rect = {0, 0, 0, 0};
+    UIRect m_relativeRect = {0, 0, 0, 0};  // stored separately for layout
     UIWidget* m_parent = nullptr;
     std::vector<std::unique_ptr<UIWidget>> m_children;
     bool m_focused = false;
