@@ -73,8 +73,6 @@ target_include_directories(vark_csg PUBLIC
     ${CMAKE_SOURCE_DIR}/src/compiler
 )
 target_link_libraries(vark_csg PRIVATE vark_common vark_manifold)
-
-# Critical: prevent Windows min/max macros from breaking Manifold
 target_compile_definitions(vark_csg PRIVATE
     NOMINMAX
     MANIFOLD_PAR=-1
@@ -92,6 +90,10 @@ target_link_libraries(vark_game PRIVATE vark_common)
 # ---- UI library (2D overlay, shared) ----
 add_library(vark_ui STATIC
     src/ui/ui_renderer.cpp
+    src/ui/ui_widget.cpp
+    src/ui/ui_root.cpp
+    src/ui/ui_layout.cpp
+    # src/ui/ui_splitter.cpp   # <-- ADD
 )
 target_compile_definitions(vark_ui PRIVATE NOMINMAX)
 target_include_directories(vark_ui PUBLIC src/ui)
@@ -101,8 +103,8 @@ target_link_libraries(vark_ui PRIVATE d3d11 d3dcompiler)
 add_library(vark_editor STATIC
     src/editor/editor.cpp
     src/editor/editor_ui.cpp
-    src/editor/editor_camera.cpp   # <-- ADDED
-    src/editor/editor_settings.cpp   # <-- add
+    src/editor/editor_camera.cpp
+    src/editor/editor_settings.cpp
 )
 target_compile_definitions(vark_editor PRIVATE NOMINMAX)
 target_include_directories(vark_editor PUBLIC

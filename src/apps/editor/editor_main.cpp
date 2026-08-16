@@ -1,4 +1,3 @@
-// src/apps/editor/editor_main.cpp
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
@@ -11,12 +10,19 @@
 #include "core/logger.h"
 #include "editor/editor.h"
 #include "editor/editor_settings.h"
+#include "ui/ui_root.h"
+#include "ui/ui_container.h"
+#include "ui/ui_layout.h"
+#include "ui/ui_label.h"
+#include "ui/ui_panel.h"
+#include "ui/ui_button.h"
 
 static HWND g_hwnd = nullptr;
 static Renderer g_renderer;
 static Level g_level;
 static UIRenderer g_ui;
 static Editor g_editor;
+static std::unique_ptr<UIRoot> g_uiRoot;
 
 static int g_clickX = 0, g_clickY = 0;
 static bool g_clickValid = false;
@@ -44,36 +50,40 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
             static int lastX = x, lastY = y;
-
             bool leftDown   = (wParam & MK_LBUTTON) != 0;
             bool middleDown = (wParam & MK_MBUTTON) != 0;
             bool rightDown  = (wParam & MK_RBUTTON) != 0;
-
             int modMask = 0;
             if (GetAsyncKeyState(VK_CONTROL) & 0x8000) modMask |= 1;
             if (GetAsyncKeyState(VK_SHIFT)   & 0x8000) modMask |= 2;
             if (GetAsyncKeyState(VK_MENU)    & 0x8000) modMask |= 4;
-
             if (leftDown || middleDown || rightDown) {
                 g_editor.on_mouse_move(x - lastX, y - lastY, leftDown, middleDown, rightDown, modMask);
             }
-
             lastX = x;
             lastY = y;
+
+            if (g_uiRoot) {
+                g_uiRoot->on_mouse_move((float)x, (float)y);
+            }
             return 0;
         }
         case WM_LBUTTONDOWN: {
-            g_clickX = GET_X_LPARAM(lParam);
-            g_clickY = GET_Y_LPARAM(lParam);
+            int x = GET_X_LPARAM(lParam);
+            int y = GET_Y_LPARAM(lParam);
+            g_clickX = x;
+            g_clickY = y;
             g_clickValid = true;
             g_editor.on_mouse_button(0, true);
+            if (g_uiRoot) {
+                g_uiRoot->on_mouse_down((float)x, (float)y, 0);
+            }
             return 0;
         }
         case WM_LBUTTONUP: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
             if (g_clickValid && abs(x - g_clickX) < 5 && abs(y - g_clickY) < 5) {
-                // Check UI first
                 bool consumed = g_editor.get_ui()->on_mouse_click(x, y);
                 if (!consumed) {
                     int idx = g_editor.pick_brush(x, y);
@@ -84,11 +94,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             }
             g_clickValid = false;
             g_editor.on_mouse_button(0, false);
+            if (g_uiRoot) {
+                g_uiRoot->on_mouse_up((float)x, (float)y, 0);
+            }
             return 0;
         }
         case WM_CHAR: {
             char c = (char)wParam;
             g_editor.get_ui()->on_text_input(c);
+            if (g_uiRoot) {
+                g_uiRoot->on_char(c);
+            }
             return 0;
         }
         case WM_KEYDOWN: {
@@ -96,6 +112,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
             if (!g_editor.get_ui()->on_key_down((int)wParam)) {
                 g_editor.on_key_down((int)wParam, ctrl, shift);
+            }
+            if (g_uiRoot) {
+                g_uiRoot->on_key_down((int)wParam, ctrl, shift);
             }
             return 0;
         }
@@ -115,12 +134,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     Logger::instance().init("logs/editor.log");
     LOG_INFO("=== Vark Editor ===");
 
-    // Load editor settings
     EditorSettings settings;
     settings.load("editor.ini");
     settings.save("editor.ini");
 
-    // Create window
     int width = settings.display.windowWidth;
     int height = settings.display.windowHeight;
 
@@ -153,14 +170,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return -1;
     }
 
-    // Initialize editor
     if (!g_editor.initialize(&g_renderer, &g_level, &g_ui)) {
         LOG_ERROR("Editor init failed");
         return -1;
     }
     g_editor.set_keybinds(settings.keybinds);
 
-    // Load level
     const char* levelPath = "assets/levels/test.vmis";
     if (lpCmdLine && lpCmdLine[0]) {
         levelPath = lpCmdLine;
@@ -171,7 +186,37 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     g_editor.sync_brushes();
 
+    // ---- Step 4: Panel + Button test (with fixed positions) ----
+    g_uiRoot = std::make_unique<UIRoot>();
+
+    auto panel = std::make_unique<UIPanel>();
+    panel->set_rect(10.0f, 60.0f, 200.0f, 100.0f);
+    panel->set_background(0.2f, 0.2f, 0.3f, 1.0f);
+    panel->set_border(0.6f, 0.6f, 0.8f, 1.0f, 2.0f);
+
+    // Position button and label inside the panel
+    auto button = std::make_unique<UIButton>("Click Me");
+    button->set_rect(panel->get_rect().x + 20.0f, panel->get_rect().y + 20.0f, 80.0f, 30.0f);
+
+    auto clickLabel = std::make_unique<UILabel>("Clicks: 0", 1.0f, 1.0f, 0.0f, 1.0f);
+    clickLabel->set_rect(panel->get_rect().x + 20.0f, panel->get_rect().y + 60.0f, 100.0f, 20.0f);
+
+    UILabel* labelPtr = clickLabel.get();
+    int clickCount = 0;
+
+    button->set_on_click([labelPtr, &clickCount]() {
+        clickCount++;
+        char buf[32];
+        snprintf(buf, sizeof(buf), "Clicks: %d", clickCount);
+        labelPtr->set_text(buf);
+    });
+
+    panel->add_child(std::move(button));
+    panel->add_child(std::move(clickLabel));
+    g_uiRoot->add_child(std::move(panel));
+
     MSG msg = {};
+
     while (msg.message != WM_QUIT) {
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
@@ -183,7 +228,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         g_renderer.begin_frame();
 
-        // Get current window size from UI renderer (updated on resize)
         int curWidth = g_ui.get_width();
         int curHeight = g_ui.get_height();
 
@@ -196,10 +240,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             g_renderer.set_transform(mvp);
         }
 
-        g_level.render(&g_renderer);
-        g_editor.render();
+        // ---- Disable 3D and old UI ----
+        // g_level.render(&g_renderer);
+        // g_editor.render();
 
-        // ---- The help text line has been removed ----
+        // ---- Clipping test ----
+        g_ui.draw_rect(0.0f, 0.0f, (float)curWidth, (float)curHeight, 1.0f, 0.0f, 0.0f, 0.5f);
+        g_ui.push_clip_rect(50.0f, 50.0f, 100.0f, 100.0f);
+        g_ui.draw_rect(0.0f, 0.0f, (float)curWidth, (float)curHeight, 0.0f, 1.0f, 0.0f, 0.7f);
+        g_ui.pop_clip_rect();
+        g_ui.draw_text(10.0f, 10.0f, "CLIP TEST: Red background, green clipped to (50,50)-(150,150)", 1.0f, 1.0f, 1.0f, 1.0f);
+
+        // ---- Render UI root ----
+        if (g_uiRoot) {
+            g_uiRoot->render_all(&g_ui);
+        }
 
         g_renderer.end_frame();
     }

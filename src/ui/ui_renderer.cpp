@@ -6,6 +6,8 @@
 #include <d3dcompiler.h>
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
+#include <vector>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -106,6 +108,12 @@ bool UIRenderer::initialize(Renderer* renderer, int width, int height)
     hr = m_device->CreateRasterizerState(&rsDesc, m_rasterizerState.GetAddressOf());
     if (FAILED(hr)) return false;
 
+    // Scissor-enabled rasterizer
+    D3D11_RASTERIZER_DESC rsDescScissor = rsDesc;
+    rsDescScissor.ScissorEnable = TRUE;
+    hr = m_device->CreateRasterizerState(&rsDescScissor, m_scissorRasterizerState.GetAddressOf());
+    if (FAILED(hr)) return false;
+
     D3D11_DEPTH_STENCIL_DESC dsDesc = {};
     dsDesc.DepthEnable = FALSE;
     dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
@@ -119,10 +127,13 @@ bool UIRenderer::initialize(Renderer* renderer, int width, int height)
     hr = m_device->CreateBlendState(&opaqueBlend, m_blendStateOpaque.GetAddressOf());
     if (FAILED(hr)) return false;
 
-    // -------- Text resources --------
+    // Text resources
     if (!create_font_resources()) {
         LOG_WARN("UI: Font resources failed, text will not be available.");
     }
+
+    m_currentScissor = { 0, 0, width, height };
+    m_scissorStack.clear();
 
     m_initialized = true;
     return true;
@@ -226,7 +237,6 @@ bool UIRenderer::create_font_resources()
 
 void UIRenderer::shutdown()
 {
-    // ComPtrs auto-release, no manual cleanup needed.
     m_initialized = false;
     m_fontReady = false;
 }
@@ -235,6 +245,36 @@ void UIRenderer::resize(int width, int height)
 {
     m_width = width;
     m_height = height;
+    m_currentScissor = { 0, 0, width, height };
+    m_scissorStack.clear();
+}
+
+void UIRenderer::push_clip_rect(float x, float y, float w, float h)
+{
+    if (!m_initialized) return;
+    m_scissorStack.push_back(m_currentScissor);
+
+    LONG left   = std::max<LONG>(m_currentScissor.left,   static_cast<LONG>(x));
+    LONG top    = std::max<LONG>(m_currentScissor.top,    static_cast<LONG>(y));
+    LONG right  = std::min<LONG>(m_currentScissor.right,  static_cast<LONG>(x + w));
+    LONG bottom = std::min<LONG>(m_currentScissor.bottom, static_cast<LONG>(y + h));
+
+    if (right <= left || bottom <= top) {
+        m_currentScissor = { 0, 0, 0, 0 };
+    } else {
+        m_currentScissor = { left, top, right, bottom };
+    }
+    m_context->RSSetScissorRects(1, &m_currentScissor);
+}
+
+void UIRenderer::pop_clip_rect()
+{
+    if (!m_initialized) return;
+    if (!m_scissorStack.empty()) {
+        m_currentScissor = m_scissorStack.back();
+        m_scissorStack.pop_back();
+        m_context->RSSetScissorRects(1, &m_currentScissor);
+    }
 }
 
 void UIRenderer::restore_engine_pipeline()
@@ -245,21 +285,22 @@ void UIRenderer::restore_engine_pipeline()
     if (m_savedRasterizer) { m_context->RSSetState(m_savedRasterizer); m_savedRasterizer = nullptr; }
     if (m_savedDepthStencil) { m_context->OMSetDepthStencilState(m_savedDepthStencil, m_savedStencilRef); m_savedDepthStencil = nullptr; }
     if (m_savedBlend) { m_context->OMSetBlendState(m_savedBlend, nullptr, 0xffffffff); m_savedBlend = nullptr; }
+    m_context->RSSetScissorRects(1, &m_savedScissor);
 }
 
 void UIRenderer::draw_rect(float x, float y, float w, float h, float r, float g, float b, float a)
 {
     if (!m_initialized) return;
 
-    // Save engine state
     m_context->VSGetShader(&m_savedVS, nullptr, nullptr);
     m_context->PSGetShader(&m_savedPS, nullptr, nullptr);
     m_context->IAGetInputLayout(&m_savedInputLayout);
     m_context->RSGetState(&m_savedRasterizer);
     m_context->OMGetDepthStencilState(&m_savedDepthStencil, &m_savedStencilRef);
     m_context->OMGetBlendState(&m_savedBlend, nullptr, nullptr);
+    UINT numRects = 1;
+    m_context->RSGetScissorRects(&numRects, &m_savedScissor);
 
-    // Update vertex buffer
     float left   = (x / m_width) * 2.0f - 1.0f;
     float right  = ((x + w) / m_width) * 2.0f - 1.0f;
     float top    = 1.0f - (y / m_height) * 2.0f;
@@ -273,14 +314,12 @@ void UIRenderer::draw_rect(float x, float y, float w, float h, float r, float g,
     memcpy(mapped.pData, verts, sizeof(verts));
     m_context->Unmap(m_vertexBuffer.Get(), 0);
 
-    // Update constant buffer (slot 1)
     hr = m_context->Map(m_constantBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
     if (FAILED(hr)) { restore_engine_pipeline(); return; }
     float color[4] = { r, g, b, a };
     memcpy(mapped.pData, color, sizeof(color));
     m_context->Unmap(m_constantBuffer.Get(), 0);
 
-    // Set rect pipeline
     UINT stride = sizeof(Pos);
     UINT offset = 0;
     m_context->IASetVertexBuffers(0, 1, m_vertexBuffer.GetAddressOf(), &stride, &offset);
@@ -292,7 +331,8 @@ void UIRenderer::draw_rect(float x, float y, float w, float h, float r, float g,
     m_context->PSSetShader(m_pixelShader.Get(), nullptr, 0);
     m_context->VSSetConstantBuffers(1, 1, m_constantBuffer.GetAddressOf());
 
-    m_context->RSSetState(m_rasterizerState.Get());
+    m_context->RSSetState(m_scissorRasterizerState.Get());
+    m_context->RSSetScissorRects(1, &m_currentScissor);
     m_context->OMSetDepthStencilState(m_depthStencilState.Get(), 0);
     m_context->OMSetBlendState(m_blendStateOpaque.Get(), nullptr, 0xffffffff);
 
@@ -305,19 +345,16 @@ void UIRenderer::draw_text(float x, float y, const char* text, float r, float g,
 {
     if (!m_initialized || !m_fontReady || !text || !text[0]) return;
 
-    // Save engine state
     m_context->VSGetShader(&m_savedVS, nullptr, nullptr);
     m_context->PSGetShader(&m_savedPS, nullptr, nullptr);
     m_context->IAGetInputLayout(&m_savedInputLayout);
     m_context->RSGetState(&m_savedRasterizer);
     m_context->OMGetDepthStencilState(&m_savedDepthStencil, &m_savedStencilRef);
     m_context->OMGetBlendState(&m_savedBlend, nullptr, nullptr);
+    UINT numRects = 1;
+    m_context->RSGetScissorRects(&numRects, &m_savedScissor);
 
-    struct TextVertex {
-        float x, y;
-        float u, v;
-    };
-
+    struct TextVertex { float x, y, u, v; };
     const int maxChars = 256;
     TextVertex vertices[256 * 6];
     int vertexCount = 0;
@@ -380,7 +417,8 @@ void UIRenderer::draw_text(float x, float y, const char* text, float r, float g,
     m_context->PSSetShaderResources(0, 1, m_fontTexture.GetAddressOf());
     m_context->PSSetSamplers(0, 1, m_samplerState.GetAddressOf());
 
-    m_context->RSSetState(m_rasterizerState.Get());
+    m_context->RSSetState(m_scissorRasterizerState.Get());
+    m_context->RSSetScissorRects(1, &m_currentScissor);
     m_context->OMSetDepthStencilState(m_depthStencilState.Get(), 0);
     m_context->OMSetBlendState(m_textBlendState.Get(), nullptr, 0xffffffff);
 
