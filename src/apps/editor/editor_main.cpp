@@ -324,6 +324,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         g_editor.update(1.0f / 60.0f);
 
         g_renderer.begin_frame();
+        g_ui.begin_frame();   // <-- NEW
 
         int curWidth = g_ui.get_width();
         int curHeight = g_ui.get_height();
@@ -370,6 +371,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         g_ui.draw_rect((float)cx, (float)(cy - len), 1.0f, (float)(len * 2), 0.0f, 1.0f, 0.0f, 1.0f);
         g_ui.draw_rect((float)(cx - 2), (float)(cy - 2), 5.0f, 5.0f, 0.0f, 1.0f, 0.0f, 1.0f);
 
+        g_ui.end_frame();     // <-- NEW
         g_renderer.end_frame();
     }
 
