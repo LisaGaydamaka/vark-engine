@@ -575,23 +575,65 @@ void Renderer::draw_lines(ID3D11Buffer* vertexBuffer, int vertexCount) {
 
 void Renderer::resize(int width, int height)
 {
+    if (width <= 0 || height <= 0) return;
+
     m_width = width;
     m_height = height;
 
     if (!swapChain) return;
 
+    // ---- Resize the swap chain ----
     renderTargetView.Reset();
+    depthStencilView.Reset();  // also release depth stencil
 
     HRESULT hr = swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
-    if (FAILED(hr)) return;
+    if (FAILED(hr)) {
+        LOG_ERROR("ResizeBuffers failed: 0x%08X", hr);
+        return;
+    }
 
+    // ---- Recreate render target view ----
     ComPtr<ID3D11Texture2D> backBuffer;
-    swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), &backBuffer);
-    device->CreateRenderTargetView(backBuffer.Get(), nullptr, renderTargetView.GetAddressOf());
+    hr = swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), &backBuffer);
+    if (FAILED(hr)) {
+        LOG_ERROR("GetBuffer failed: 0x%08X", hr);
+        return;
+    }
+    hr = device->CreateRenderTargetView(backBuffer.Get(), nullptr, renderTargetView.GetAddressOf());
+    if (FAILED(hr)) {
+        LOG_ERROR("CreateRenderTargetView failed: 0x%08X", hr);
+        return;
+    }
 
+    // ---- Recreate depth stencil view (match new size) ----
+    D3D11_TEXTURE2D_DESC depthDesc = {};
+    depthDesc.Width = width;
+    depthDesc.Height = height;
+    depthDesc.MipLevels = 1;
+    depthDesc.ArraySize = 1;
+    depthDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    depthDesc.SampleDesc.Count = 1;
+    depthDesc.SampleDesc.Quality = 0;
+    depthDesc.Usage = D3D11_USAGE_DEFAULT;
+    depthDesc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+
+    ComPtr<ID3D11Texture2D> depthTexture;
+    hr = device->CreateTexture2D(&depthDesc, nullptr, &depthTexture);
+    if (FAILED(hr)) {
+        LOG_ERROR("CreateTexture2D for depth failed: 0x%08X", hr);
+        return;
+    }
+    hr = device->CreateDepthStencilView(depthTexture.Get(), nullptr, depthStencilView.GetAddressOf());
+    if (FAILED(hr)) {
+        LOG_ERROR("CreateDepthStencilView failed: 0x%08X", hr);
+        return;
+    }
+
+    // ---- Rebind render targets ----
     context->OMSetRenderTargets(1, renderTargetView.GetAddressOf(), depthStencilView.Get());
 
-    D3D11_VIEWPORT vp;
+    // ---- Update viewport ----
+    D3D11_VIEWPORT vp = {};
     vp.Width = (float)width;
     vp.Height = (float)height;
     vp.MinDepth = 0.0f;
@@ -599,4 +641,6 @@ void Renderer::resize(int width, int height)
     vp.TopLeftX = 0;
     vp.TopLeftY = 0;
     context->RSSetViewports(1, &vp);
+
+    LOG_INFO("Renderer resized to %dx%d", width, height);
 }
