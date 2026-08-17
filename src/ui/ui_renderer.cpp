@@ -229,7 +229,8 @@ void UIRenderer::create_buffers()
     }
     D3D11_BUFFER_DESC ibd = {};
     ibd.Usage = D3D11_USAGE_DEFAULT;
-    ibd.ByteWidth = sizeof(unsigned short) * indices.size();
+    ibd.ByteWidth = static_cast<UINT>(sizeof(unsigned short) * indices.size());
+
     ibd.BindFlags = D3D11_BIND_INDEX_BUFFER;
     D3D11_SUBRESOURCE_DATA idata = { indices.data() };
     m_device->CreateBuffer(&ibd, &idata, m_rectIndexBuffer.GetAddressOf());
