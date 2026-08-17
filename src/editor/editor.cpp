@@ -51,6 +51,7 @@ void Editor::shutdown() {
 
 void Editor::sync_brushes() {
     m_brushes = m_level->get_brushes();
+    renumber_times();   // <-- ensure sequential times
     if (m_selectedIndex >= (int)m_brushes.size()) {
         m_selectedIndex = -1;
     }
@@ -179,6 +180,7 @@ void Editor::save_level() {
         LOG_WARN("No brushes to save.");
         return;
     }
+    renumber_times();
 
     // Build material table (VMISMaterial) and indices
     std::vector<VMISMaterial> materials;
@@ -282,12 +284,7 @@ void Editor::add_brush(BrushType type, ShapeType shape) {
     b.size = {4,4,4};
     for (auto& f : b.faces) f = FaceTexture();
 
-    // Set time (max existing time + 1)
-    int newTime = 1;
-    for (const auto& existing : m_brushes) {
-        if (existing.time >= newTime) newTime = existing.time + 1;
-    }
-    b.time = newTime;
+    b.time = (int)m_brushes.size();
 
     // Set name based on type and shape (no numbering)
     std::string typeStr = (type == BrushType::Add) ? "Add" : "Sub";
@@ -360,4 +357,17 @@ void Editor::set_keybinds(const EditorKeybindSettings& keybinds) {
 void Editor::set_brush_name(int index, const std::string& name) {
     if (index < 0 || index >= (int)m_brushes.size()) return;
     m_brushes[index].name = name;
+}
+
+void Editor::renumber_times() {
+    if (m_brushes.empty()) return;
+    // Sort by current time (which may have gaps)
+    std::sort(m_brushes.begin(), m_brushes.end(),
+        [](const Brush& a, const Brush& b) {
+            return a.time < b.time;
+        });
+    // Assign sequential times starting from 0
+    for (int i = 0; i < (int)m_brushes.size(); ++i) {
+        m_brushes[i].time = i;
+    }
 }

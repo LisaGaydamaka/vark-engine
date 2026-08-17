@@ -47,6 +47,7 @@ public:
     void on_mouse_move(int dx, int dy, bool leftDown, bool middleDown, bool rightDown, int modMask);
     void on_mouse_wheel(int delta);
     void on_key_down(int key, bool ctrl, bool shift);
+    void renumber_times();
 
 private:
     void rebuild_wireframe_buffer();

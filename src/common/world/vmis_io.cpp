@@ -30,6 +30,9 @@ static VMISBrush brush_to_vmisbrush(const Brush& brush) {
     vb.shape = (brush.shape == ShapeType::Box) ? 0 : 1;
     vb.time = brush.time;
 
+    // Copy name
+    strncpy_s(vb.name, sizeof(vb.name), brush.name.c_str(), _TRUNCATE);
+
     for (int i = 0; i < 6; ++i) {
         const auto& ft = brush.faces[i];
         copy_string(vb.faces[i].texturePath, sizeof(vb.faces[i].texturePath), ft.texturePath);
@@ -44,7 +47,7 @@ static VMISBrush brush_to_vmisbrush(const Brush& brush) {
 }
 
 // -----------------------------------------------------------------------------
-// Convert VMISBrush back to Brush
+// Convert VMISBrush back to Brush (for version >= 2)
 // -----------------------------------------------------------------------------
 static Brush vmisbrush_to_brush(const VMISBrush& vb) {
     Brush brush;
@@ -55,6 +58,15 @@ static Brush vmisbrush_to_brush(const VMISBrush& vb) {
     brush.time = vb.time;
     brush.color = { 1.0f, 1.0f, 1.0f };
 
+    // Read name, or fallback to default
+    if (vb.name[0] != '\0') {
+        brush.name = vb.name;
+    } else {
+        std::string typeStr = (brush.type == BrushType::Add) ? "Add" : "Sub";
+        std::string shapeStr = (brush.shape == ShapeType::Box) ? "Box" : "Wedge";
+        brush.name = typeStr + " " + shapeStr;
+    }
+
     for (int i = 0; i < 6; ++i) {
         const auto& vf = vb.faces[i];
         auto& ft = brush.faces[i];
@@ -64,12 +76,6 @@ static Brush vmisbrush_to_brush(const VMISBrush& vb) {
         ft.rotation = vf.rotation;
         ft.worldLocked = (vf.worldLocked != 0);
     }
-
-    // ---- Set default name based on type and shape ----
-    std::string typeStr = (brush.type == BrushType::Add) ? "Add" : "Sub";
-    std::string shapeStr = (brush.shape == ShapeType::Box) ? "Box" : "Wedge";
-    brush.name = typeStr + " " + shapeStr;
-
     return brush;
 }
 
@@ -107,10 +113,8 @@ bool write_vmis(const char* path,
     size_t brushCatalogSize = vmisBrushes.size() * sizeof(VMISBrush);
 
     // Baked Mesh: we store vertex count, then vertices, then index count, then indices.
-    // We'll pack as: [uint32_t numVerts][verts][uint32_t numIndices][indices]
     size_t bakedVertsSize = bakedVerts.size() * sizeof(Vertex);
     size_t bakedIndicesSize = bakedIndices.size() * sizeof(uint32_t);
-    size_t bakedMeshTotal = sizeof(uint32_t) + bakedVertsSize + sizeof(uint32_t) + bakedIndicesSize;
 
     // Material Table: store count then array
     size_t matTableSize = sizeof(uint32_t) + materials.size() * sizeof(VMISMaterial);
@@ -124,11 +128,9 @@ bool write_vmis(const char* path,
     // ---------- 2. Write header (temporary) ----------
     VMISHeader header{};
     memcpy(header.magic, "VMIS", 4);
-    header.version = 1;
+    header.version = VMIS_VERSION;   // <-- use new version
     header.fileSize = 0; // placeholder
 
-    // We'll fill offsets after we know them.
-    // For now, skip header space.
     file.seekp(0);
     file.write(reinterpret_cast<const char*>(&header), sizeof(header));
 
@@ -166,7 +168,7 @@ bool write_vmis(const char* path,
 
     // ---------- 4. Finalise header ----------
     uint64_t endPos = file.tellp();
-    header.fileSize = (uint32_t)endPos;  // fits in 32-bit (file < 4GB)
+    header.fileSize = (uint32_t)endPos;
     header.offsetBrushCatalog = offBrushCatalog;
     header.offsetBakedMesh = offBakedMesh;
     header.offsetMaterialTable = offMatTable;
@@ -205,7 +207,7 @@ bool read_vmis(const char* path,
         LOG_ERROR("read_vmis: invalid magic (not a VMIS file)");
         return false;
     }
-    if (header.version != 1) {
+    if (header.version < 1 || header.version > VMIS_VERSION) {
         LOG_ERROR("read_vmis: unsupported version %u", header.version);
         return false;
     }
@@ -213,8 +215,7 @@ bool read_vmis(const char* path,
     // Helper: seek and read a section
     auto read_section = [&](uint64_t offset, void* data, size_t size) -> bool {
         if (offset == 0) {
-            // Section may be absent (e.g., debug wireframe)
-            return true;
+            return true; // section absent
         }
         file.seekg(offset);
         file.read(reinterpret_cast<char*>(data), size);
@@ -224,27 +225,81 @@ bool read_vmis(const char* path,
     // ---------- 1. Brush Catalog ----------
     if (header.offsetBrushCatalog != 0) {
         file.seekg(header.offsetBrushCatalog);
-        // We don't know how many brushes; we'll read until end of section.
-        // But we can infer from file size? Better: read all remaining bytes and divide by sizeof(VMISBrush)
-        // However we don't have a count in the header. We'll read the entire section by jumping to next section.
-        // We can compute size from other offsets: next section offset - current.
         uint64_t nextOffset = header.offsetBakedMesh;
         size_t byteSize = (size_t)(nextOffset - header.offsetBrushCatalog);
-        if (byteSize % sizeof(VMISBrush) != 0) {
-            LOG_ERROR("read_vmis: Brush Catalog size is not a multiple of VMISBrush");
-            return false;
-        }
-        size_t count = byteSize / sizeof(VMISBrush);
-        std::vector<VMISBrush> vmisBrushes(count);
-        file.read(reinterpret_cast<char*>(vmisBrushes.data()), byteSize);
-        if (!file) {
-            LOG_ERROR("read_vmis: failed to read Brush Catalog");
-            return false;
-        }
-        outBrushes.clear();
-        outBrushes.reserve(count);
-        for (const auto& vb : vmisBrushes) {
-            outBrushes.push_back(vmisbrush_to_brush(vb));
+        if (header.version == 1) {
+            // ---- Version 1: old struct without name (560 bytes) ----
+            struct OldVMISBrush {
+                float center[3];
+                float size[3];
+                uint8_t type;
+                uint8_t shape;
+                uint8_t padding[2];
+                int32_t time;
+                struct FaceRecord {
+                    char texturePath[64];
+                    float offsetX, offsetY;
+                    float scaleX, scaleY;
+                    float rotation;
+                    uint8_t worldLocked;
+                    uint8_t padding[3];
+                } faces[6];
+            };
+            static_assert(sizeof(OldVMISBrush) == 560, "Old struct size mismatch");
+            if (byteSize % sizeof(OldVMISBrush) != 0) {
+                LOG_ERROR("read_vmis: Brush Catalog size mismatch for version 1");
+                return false;
+            }
+            size_t count = byteSize / sizeof(OldVMISBrush);
+            std::vector<OldVMISBrush> oldBrushes(count);
+            file.read(reinterpret_cast<char*>(oldBrushes.data()), byteSize);
+            if (!file) {
+                LOG_ERROR("read_vmis: failed to read old Brush Catalog");
+                return false;
+            }
+            outBrushes.clear();
+            outBrushes.reserve(count);
+            for (const auto& ob : oldBrushes) {
+                Brush brush;
+                brush.center = { ob.center[0], ob.center[1], ob.center[2] };
+                brush.size = { ob.size[0], ob.size[1], ob.size[2] };
+                brush.type = (ob.type == 0) ? BrushType::Add : BrushType::Sub;
+                brush.shape = (ob.shape == 0) ? ShapeType::Box : ShapeType::Wedge;
+                brush.time = ob.time;
+                brush.color = { 1.0f, 1.0f, 1.0f };
+                // Set default name
+                std::string typeStr = (brush.type == BrushType::Add) ? "Add" : "Sub";
+                std::string shapeStr = (brush.shape == ShapeType::Box) ? "Box" : "Wedge";
+                brush.name = typeStr + " " + shapeStr;
+                for (int i = 0; i < 6; ++i) {
+                    const auto& vf = ob.faces[i];
+                    auto& ft = brush.faces[i];
+                    ft.texturePath = vf.texturePath;
+                    ft.offset = { vf.offsetX, vf.offsetY };
+                    ft.scale = { vf.scaleX, vf.scaleY };
+                    ft.rotation = vf.rotation;
+                    ft.worldLocked = (vf.worldLocked != 0);
+                }
+                outBrushes.push_back(brush);
+            }
+        } else {
+            // Version 2+ : new struct with name
+            if (byteSize % sizeof(VMISBrush) != 0) {
+                LOG_ERROR("read_vmis: Brush Catalog size mismatch for version %u", header.version);
+                return false;
+            }
+            size_t count = byteSize / sizeof(VMISBrush);
+            std::vector<VMISBrush> vmisBrushes(count);
+            file.read(reinterpret_cast<char*>(vmisBrushes.data()), byteSize);
+            if (!file) {
+                LOG_ERROR("read_vmis: failed to read Brush Catalog");
+                return false;
+            }
+            outBrushes.clear();
+            outBrushes.reserve(count);
+            for (const auto& vb : vmisBrushes) {
+                outBrushes.push_back(vmisbrush_to_brush(vb));
+            }
         }
     } else {
         outBrushes.clear();
