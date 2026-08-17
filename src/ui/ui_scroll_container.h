@@ -1,6 +1,7 @@
 #pragma once
 #include "ui_widget.h"
 #include "ui_scrollbar.h"
+#include "ui_scrollable.h"
 #include <memory>
 
 class UIScrollContainer : public UIWidget {
@@ -8,8 +9,12 @@ public:
     UIScrollContainer();
     ~UIScrollContainer() = default;
 
+    // Set the child widget; it must implement IScrollable (e.g., UIList).
     void set_child(std::unique_ptr<UIWidget> child);
+
     void set_scrollbar_width(float width) { m_scrollbarWidth = width; }
+
+    // Return the raw child (for external access, e.g., to set callbacks).
     UIWidget* get_child() const { return m_child; }
 
     void layout() override;
@@ -20,7 +25,8 @@ public:
     bool on_mouse_move(float x, float y) override;
 
 private:
-    UIWidget* m_child = nullptr;
+    UIWidget* m_child = nullptr;          // The actual widget (for rendering, hit testing)
+    IScrollable* m_scrollable = nullptr;  // The same widget, but as scrollable interface
     UIScrollBar* m_scrollbar = nullptr;
     float m_scrollbarWidth = 16.0f;
     float m_scrollOffset = 0.0f;

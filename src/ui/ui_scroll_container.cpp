@@ -1,7 +1,6 @@
 #include "ui_scroll_container.h"
 #include "ui_renderer.h"
 #include "ui_root.h"
-#include "ui_list.h"
 #include "core/logger.h"
 #include "ui_style.h"
 #include <algorithm>
@@ -19,17 +18,29 @@ UIScrollContainer::UIScrollContainer() {
 }
 
 void UIScrollContainer::set_child(std::unique_ptr<UIWidget> child) {
-    if (child) {
-        child->set_parent(this);
-        m_child = child.get();
-        add_child(std::move(child));
+    if (!child) {
+        m_child = nullptr;
+        m_scrollable = nullptr;
+        return;
     }
+
+    // Check if the child implements IScrollable.
+    IScrollable* scrollable = dynamic_cast<IScrollable*>(child.get());
+    if (!scrollable) {
+        LOG_ERROR("UIScrollContainer: child does not implement IScrollable; ignoring.");
+        return;
+    }
+
+    child->set_parent(this);
+    m_child = child.get();
+    m_scrollable = scrollable;
+    add_child(std::move(child));
 }
 
 void UIScrollContainer::layout() {
-    if (!m_child) return;
+    if (!m_child || !m_scrollable) return;
 
-    m_contentHeight = m_child->get_content_height();
+    m_contentHeight = m_scrollable->get_content_height();
     m_viewportHeight = m_rect.h;
 
     float childWidth = m_rect.w - m_scrollbarWidth;
@@ -56,13 +67,15 @@ void UIScrollContainer::render(UIRenderer* ui) {
 
 bool UIScrollContainer::on_mouse_wheel(float delta, float x, float y) {
     (void)x; (void)y;
-    if (!m_child) return false;
+    if (!m_scrollable) return false;
+
     float step = 60.0f;
     float maxOffset = std::max(0.0f, m_contentHeight - m_viewportHeight);
     float newOffset = m_scrollOffset - delta * step;
     newOffset = std::clamp(newOffset, 0.0f, maxOffset);
     if (newOffset != m_scrollOffset) {
         m_scrollOffset = newOffset;
+        m_scrollable->set_scroll_offset(m_scrollOffset);
         update_scrollbar();
         return true;
     }
@@ -100,11 +113,11 @@ bool UIScrollContainer::on_mouse_move(float x, float y) {
 }
 
 void UIScrollContainer::update_scrollbar() {
-    if (!m_child) {
-        LOG_WARN("update_scrollbar called with null child");
+    if (!m_scrollable) {
+        LOG_WARN("update_scrollbar called with null scrollable");
         return;
     }
-    m_contentHeight = m_child->get_content_height();
+    m_contentHeight = m_scrollable->get_content_height();
     m_viewportHeight = m_rect.h;
     float maxOffset = std::max(0.0f, m_contentHeight - m_viewportHeight);
     m_scrollOffset = std::clamp(m_scrollOffset, 0.0f, maxOffset);
@@ -112,14 +125,14 @@ void UIScrollContainer::update_scrollbar() {
     m_scrollbar->set_range(0.0f, maxOffset);
     m_scrollbar->set_value(m_scrollOffset);
 
-    if (UIList* list = dynamic_cast<UIList*>(m_child)) {
-        list->set_scroll_offset(m_scrollOffset);
-    }
+    // The scrollable already has its offset set via set_scroll_offset when wheel/bar changes.
+    // But in case the bar was moved programmatically, we propagate here.
+    m_scrollable->set_scroll_offset(m_scrollOffset);
 }
 
 void UIScrollContainer::on_scrollbar_value_changed(float value) {
     m_scrollOffset = value;
-    if (UIList* list = dynamic_cast<UIList*>(m_child)) {
-        list->set_scroll_offset(m_scrollOffset);
+    if (m_scrollable) {
+        m_scrollable->set_scroll_offset(m_scrollOffset);
     }
 }

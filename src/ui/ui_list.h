@@ -1,10 +1,11 @@
 #pragma once
 #include "ui_widget.h"
+#include "ui_scrollable.h"
 #include <vector>
 #include <string>
 #include <functional>
 
-class UIList : public UIWidget {
+class UIList : public UIWidget, public IScrollable {
 public:
     UIList();
     ~UIList() = default;
@@ -15,10 +16,10 @@ public:
     void set_selected(int index);
     int get_selected() const { return m_selected; }
 
-    void set_scroll_offset(float offset) { m_scrollOffset = offset; }
-    float get_scroll_offset() const { return m_scrollOffset; }
-    float get_total_height() const { return m_items.size() * m_itemHeight; }
-    float get_content_height() const override { return get_total_height(); }
+    // ---- IScrollable implementation ----
+    void set_scroll_offset(float offset) override { m_scrollOffset = offset; }
+    float get_content_height() const override { return m_items.size() * m_itemHeight; }
+    // get_content_width not needed for vertical list
 
     bool is_interactive() const override { return true; }
 
