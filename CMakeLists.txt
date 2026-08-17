@@ -96,7 +96,10 @@ add_library(vark_ui STATIC
     # src/ui/ui_splitter.cpp   # <-- ADD
 )
 target_compile_definitions(vark_ui PRIVATE NOMINMAX)
-target_include_directories(vark_ui PUBLIC src/ui)
+target_include_directories(vark_ui PUBLIC
+    src/ui
+    src/common
+)
 target_link_libraries(vark_ui PRIVATE d3d11 d3dcompiler)
 
 # ---- Editor library (editor logic, uses CSG) ----
