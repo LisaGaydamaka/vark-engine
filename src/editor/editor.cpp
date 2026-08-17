@@ -51,7 +51,7 @@ void Editor::shutdown() {
 
 void Editor::sync_brushes() {
     m_brushes = m_level->get_brushes();
-    renumber_times();   // <-- ensure sequential times
+    renumber_times();   // Normalize times after load
     if (m_selectedIndex >= (int)m_brushes.size()) {
         m_selectedIndex = -1;
     }
@@ -175,11 +175,61 @@ bool Editor::intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir, const Vec
     return true;
 }
 
+// ---- Renumber times to 0..N-1 (sorts by current time) ----
+void Editor::renumber_times() {
+    if (m_brushes.empty()) return;
+    std::sort(m_brushes.begin(), m_brushes.end(),
+        [](const Brush& a, const Brush& b) {
+            return a.time < b.time;
+        });
+    for (int i = 0; i < (int)m_brushes.size(); ++i) {
+        m_brushes[i].time = i;
+    }
+}
+
+// ---- Set brush name ----
+void Editor::set_brush_name(int index, const std::string& name) {
+    if (index < 0 || index >= (int)m_brushes.size()) return;
+    m_brushes[index].name = name;
+}
+
+// ---- Set brush time with reordering and conflict resolution ----
+void Editor::set_brush_time(int index, int newTime) {
+    if (index < 0 || index >= (int)m_brushes.size()) return;
+
+    // Clamp newTime to valid range
+    int targetPos = newTime;
+    if (targetPos < 0) targetPos = 0;
+    if (targetPos >= (int)m_brushes.size()) targetPos = (int)m_brushes.size();
+
+    // If already at target position, nothing to do
+    if (index == targetPos) return;
+
+    // Move brush from 'index' to 'targetPos'
+    Brush movedBrush = m_brushes[index];
+    m_brushes.erase(m_brushes.begin() + index);
+
+    // Adjust target if we removed before it
+    if (targetPos > index) targetPos--;
+
+    m_brushes.insert(m_brushes.begin() + targetPos, movedBrush);
+
+    // Renumber all brushes sequentially (0..N-1)
+    for (int i = 0; i < (int)m_brushes.size(); ++i) {
+        m_brushes[i].time = i;
+    }
+
+    // Select the moved brush
+    m_selectedIndex = targetPos;
+}
+
 void Editor::save_level() {
     if (m_brushes.empty()) {
         LOG_WARN("No brushes to save.");
         return;
     }
+
+    // Ensure times are sequential before saving
     renumber_times();
 
     // Build material table (VMISMaterial) and indices
@@ -275,7 +325,6 @@ void Editor::delete_selected() {
     m_selectedIndex = -1;
 }
 
-// ------ MODIFIED add_brush ------
 void Editor::add_brush(BrushType type, ShapeType shape) {
     Brush b;
     b.type = type;
@@ -284,9 +333,10 @@ void Editor::add_brush(BrushType type, ShapeType shape) {
     b.size = {4,4,4};
     for (auto& f : b.faces) f = FaceTexture();
 
+    // Set time to next available index
     b.time = (int)m_brushes.size();
 
-    // Set name based on type and shape (no numbering)
+    // Set name based on type and shape
     std::string typeStr = (type == BrushType::Add) ? "Add" : "Sub";
     std::string shapeStr = (shape == ShapeType::Box) ? "Box" : "Wedge";
     b.name = typeStr + " " + shapeStr;
@@ -294,7 +344,6 @@ void Editor::add_brush(BrushType type, ShapeType shape) {
     m_brushes.push_back(b);
     m_selectedIndex = (int)m_brushes.size() - 1;
 }
-// ---------------------------------
 
 void Editor::select_brush(int index) {
     if (index >= 0 && index < (int)m_brushes.size()) {
@@ -352,22 +401,4 @@ void Editor::on_key_down(int key, bool ctrl, bool shift) {
 
 void Editor::set_keybinds(const EditorKeybindSettings& keybinds) {
     m_keybinds = keybinds;
-}
-
-void Editor::set_brush_name(int index, const std::string& name) {
-    if (index < 0 || index >= (int)m_brushes.size()) return;
-    m_brushes[index].name = name;
-}
-
-void Editor::renumber_times() {
-    if (m_brushes.empty()) return;
-    // Sort by current time (which may have gaps)
-    std::sort(m_brushes.begin(), m_brushes.end(),
-        [](const Brush& a, const Brush& b) {
-            return a.time < b.time;
-        });
-    // Assign sequential times starting from 0
-    for (int i = 0; i < (int)m_brushes.size(); ++i) {
-        m_brushes[i].time = i;
-    }
 }

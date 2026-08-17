@@ -26,8 +26,14 @@ public:
     void select_brush(int index);
     int pick_brush(int mouseX, int mouseY);
 
-    // ---- NEW: set brush name ----
+    // ---- Name editing ----
     void set_brush_name(int index, const std::string& name);
+
+    // ---- Time editing with reordering ----
+    void set_brush_time(int index, int newTime);
+
+    // ---- Normalize times to 0..N-1 ----
+    void renumber_times();
 
     // Camera access
     Camera* get_camera() { return m_editorCamera.get_camera(); }
@@ -47,7 +53,6 @@ public:
     void on_mouse_move(int dx, int dy, bool leftDown, bool middleDown, bool rightDown, int modMask);
     void on_mouse_wheel(int delta);
     void on_key_down(int key, bool ctrl, bool shift);
-    void renumber_times();
 
 private:
     void rebuild_wireframe_buffer();

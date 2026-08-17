@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <vector>
 #include <cstring>
+#include <cstdlib>
 
 static void BuildMenuBar(Editor& editor);
 static void BuildLeftPanel(Editor& editor);
@@ -57,7 +58,7 @@ static void BuildMenuBar(Editor& editor) {
 }
 
 // ------------------------------------------------------------------
-// Left Panel – Brush List with editable names on double-click
+// Left Panel – Brush List with editable Time and Name
 // ------------------------------------------------------------------
 static void BuildLeftPanel(Editor& editor) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -102,6 +103,7 @@ static void BuildLeftPanel(Editor& editor) {
 
     // Static state for inline editing
     static int editingIndex = -1;
+    static int editingColumn = -1;  // 0 = Time, 1 = Name
     static char editingBuffer[128] = "";
 
     ImGui::BeginChild("BrushList", ImVec2(0, 0), true);
@@ -115,7 +117,7 @@ static void BuildLeftPanel(Editor& editor) {
         ImGui::TableSetupColumn("Brush", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
 
-        // Sort brushes by time
+        // Sort brushes by time (ascending)
         std::vector<int> sortedIndices;
         sortedIndices.resize(brushes.size());
         for (int i = 0; i < (int)brushes.size(); ++i) sortedIndices[i] = i;
@@ -128,61 +130,85 @@ static void BuildLeftPanel(Editor& editor) {
             bool isEditing = (idx == editingIndex);
 
             ImGui::TableNextRow();
+
+            // ---- Row unique ID ----
+            ImGui::PushID(idx);
+
+            // ---- Time column ----
             ImGui::TableSetColumnIndex(0);
-
-            // ---- Row interaction ----
-            if (!isEditing) {
-                // Normal row: draw selectable
-                char rowLabel[32];
-                snprintf(rowLabel, sizeof(rowLabel), "##row_%d", idx);
-                if (ImGui::Selectable(rowLabel, isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
-                    editor.select_brush(idx);
-                }
-                // Double-click to start editing
-                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
-                    editingIndex = idx;
-                    // Use safe strncpy_s
-                    strncpy_s(editingBuffer, sizeof(editingBuffer), b.name.c_str(), _TRUNCATE);
-                    ImGui::SetKeyboardFocusHere();
-                }
-            } else {
-                // Editing row: we need a dummy to prevent selection, but we also need to handle clicks to commit
-                // Use an invisible button to eat clicks? Actually we want the input to be clickable.
-                // We'll draw a dummy that spans the row, and then the input on top.
-                // But we don't need to draw anything here; the input will be drawn in the next column.
-                // However, we need to handle click outside to commit. We'll handle that in the input logic.
-                // We can just draw nothing here.
-            }
-
-            // Time column
-            ImGui::SameLine();
-            ImGui::Text("%d", b.time);
-
-            // Brush column
-            ImGui::TableSetColumnIndex(1);
-            if (isEditing) {
-                ImGui::PushID(idx);
-                // Input text
+            if (isEditing && editingColumn == 0) {
+                // Editing Time – zero padding, full width, auto select all
                 bool commit = false;
-                if (ImGui::InputText("##edit", editingBuffer, sizeof(editingBuffer),
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::SetKeyboardFocusHere(0);
+                if (ImGui::InputText("##edit_time", editingBuffer, sizeof(editingBuffer),
                     ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
                 {
                     commit = true;
                 }
-                // Commit on focus loss (click outside) – but only if we clicked outside the input and not on another brush
-                if (!ImGui::IsItemActive() && !ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
-                    // Check if the click was on another row? We need to know if the click is outside the entire table.
-                    // Simpler: if we lose focus and we are not hovering, commit.
+                ImGui::PopStyleVar();
+                if (!ImGui::IsItemActive() && ImGui::IsMouseClicked(0)) {
+                    commit = true;
+                }
+                if (commit) {
+                    int newTime = atoi(editingBuffer);
+                    editor.set_brush_time(idx, newTime);
+                    editingIndex = -1;
+                }
+            } else {
+                // Normal Time cell: clickable to select, double-click to edit
+                char timeLabel[32];
+                snprintf(timeLabel, sizeof(timeLabel), "%d", b.time);
+                ImGui::PushID("time");
+                if (ImGui::Selectable(timeLabel, isSelected, ImGuiSelectableFlags_None)) {
+                    editor.select_brush(idx);
+                }
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                    editingIndex = idx;
+                    editingColumn = 0;
+                    snprintf(editingBuffer, sizeof(editingBuffer), "%d", b.time);
+                }
+                ImGui::PopID();
+            }
+
+            // ---- Name column ----
+            ImGui::TableSetColumnIndex(1);
+            if (isEditing && editingColumn == 1) {
+                // Editing Name – zero padding, full width, auto select all
+                bool commit = false;
+                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+                ImGui::SetNextItemWidth(-1.0f);
+                ImGui::SetKeyboardFocusHere(0);
+                if (ImGui::InputText("##edit_name", editingBuffer, sizeof(editingBuffer),
+                    ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
+                {
+                    commit = true;
+                }
+                ImGui::PopStyleVar();
+                if (!ImGui::IsItemActive() && ImGui::IsMouseClicked(0)) {
                     commit = true;
                 }
                 if (commit) {
                     editor.set_brush_name(idx, editingBuffer);
                     editingIndex = -1;
                 }
-                ImGui::PopID();
             } else {
-                ImGui::Text("%s", b.name.c_str());
+                // Normal Name cell: clickable to select, double-click to edit
+                ImGui::PushID("name");
+                if (ImGui::Selectable(b.name.c_str(), isSelected, ImGuiSelectableFlags_None)) {
+                    editor.select_brush(idx);
+                }
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                    editingIndex = idx;
+                    editingColumn = 1;
+                    strncpy_s(editingBuffer, sizeof(editingBuffer), b.name.c_str(), _TRUNCATE);
+                }
+                ImGui::PopID();
             }
+
+            // ---- End row ID ----
+            ImGui::PopID();
         }
         ImGui::EndTable();
     }
