@@ -4,20 +4,28 @@
 #include <typeinfo>
 
 static UIWidget* find_deepest_widget(UIWidget* parent, float x, float y) {
-    if (parent->is_priority_hit(x, y)) {
-        LOG_INFO("UI: priority hit on %s", typeid(*parent).name());
-        return parent;
-    }
+    // Check children (back-to-front)
     const auto& children = parent->get_children();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
         UIWidget* child = it->get();
         if (child->hit_test(x, y)) {
+            // Recurse into this child
             UIWidget* deeper = find_deepest_widget(child, x, y);
-            if (deeper) {
+            // If recursion found an interactive widget, return it
+            if (deeper && deeper->is_interactive()) {
                 return deeper;
             }
-            return child;
+            // Otherwise, if the child itself is interactive, return it
+            if (child->is_interactive()) {
+                return child;
+            }
+            // If neither, continue to next sibling
         }
+    }
+    // No interactive child found; check if parent has a priority hit (e.g., splitter handle)
+    if (parent->is_priority_hit(x, y)) {
+        LOG_INFO("UI: priority hit on %s", typeid(*parent).name());
+        return parent;
     }
     return nullptr;
 }
@@ -114,6 +122,16 @@ bool UIRoot::on_char(char c) {
     return false;
 }
 
+bool UIRoot::on_mouse_wheel(float delta, float x, float y) {
+    UIWidget* target = find_widget_at(x, y);
+    while (target) {
+        if (target->on_mouse_wheel(delta, x, y))
+            return true;
+        target = target->get_parent();
+    }
+    return false;
+}
+
 void UIRoot::set_capture(UIWidget* widget, bool capture) {
     if (capture) {
         m_capturedWidget = widget;
@@ -141,15 +159,4 @@ void UIRoot::set_focused_widget(UIWidget* widget) {
         LOG_INFO("UI: focusing new widget");
         widget->set_focus(true);
     }
-}
-
-// ---- NEW: Mouse wheel handling with bubble-up ----
-bool UIRoot::on_mouse_wheel(float delta, float x, float y) {
-    UIWidget* target = find_widget_at(x, y);
-    while (target) {
-        if (target->on_mouse_wheel(delta, x, y))
-            return true;
-        target = target->get_parent();
-    }
-    return false;
 }

@@ -15,6 +15,9 @@ public:
 
     void set_on_value_changed(std::function<void(float)> callback) { m_onValueChanged = callback; }
 
+    // ---- NEW: interactive ----
+    bool is_interactive() const override { return true; }
+
     void render(UIRenderer* ui) override;
     bool on_mouse_down(float x, float y, int button) override;
     bool on_mouse_up(float x, float y, int button) override;
@@ -27,7 +30,7 @@ private:
     float m_value = 0.0f;
     float m_thumbSize = 20.0f;
     bool m_dragging = false;
-    float m_dragOffset = 0.0f; // offset from thumb top to mouse
+    float m_dragOffset = 0.0f;
     std::function<void(float)> m_onValueChanged;
 
     float get_track_length() const;

@@ -133,22 +133,21 @@ bool UIScrollBar::on_mouse_down(float x, float y, int button) {
 
 bool UIScrollBar::on_mouse_up(float x, float y, int button) {
     LOG_INFO("ScrollBar::on_mouse_up(%.1f, %.1f, %d), m_dragging=%d", x, y, button, m_dragging);
-    if (button == 0) {
-        bool wasDragging = m_dragging;
+    if (button == 0 && m_dragging) {
         m_dragging = false;
         UIRoot* root = get_root();
-        if (root && wasDragging) {
+        if (root) {
             root->set_capture(this, false);
             LOG_INFO("ScrollBar: released capture");
         }
-        return wasDragging; // return true if we handled it
+        return true;
     }
-    // For other buttons, still reset if somehow dragging
+    // Safety reset if dragging left on
     if (m_dragging) {
         m_dragging = false;
         UIRoot* root = get_root();
         if (root) root->set_capture(this, false);
-        LOG_INFO("ScrollBar: force reset dragging on non-LMB up");
+        LOG_INFO("ScrollBar: force reset dragging");
         return true;
     }
     return false;

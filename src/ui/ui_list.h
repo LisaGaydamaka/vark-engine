@@ -21,6 +21,9 @@ public:
     float get_total_height() const { return m_items.size() * m_itemHeight; }
     float get_content_height() const override { return get_total_height(); }
 
+    // ---- NEW: interactive ----
+    bool is_interactive() const override { return true; }
+
     void set_on_selection_changed(std::function<void(int)> callback) { m_onSelectionChanged = callback; }
     void set_on_reordered(std::function<void(const std::vector<int>&)> callback) { m_onReordered = callback; }
 
@@ -38,7 +41,7 @@ private:
     int m_selected = -1;
     int m_hoveredIndex = -1;
     float m_itemHeight = 20.0f;
-    float m_scrollOffset = 0.0f;   // pixel offset from top
+    float m_scrollOffset = 0.0f;
 
     std::function<void(int)> m_onSelectionChanged;
     std::function<void(const std::vector<int>&)> m_onReordered;

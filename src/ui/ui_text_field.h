@@ -24,6 +24,7 @@ public:
 
     void on_focus_gained() override { m_cursorVisible = true; }
     void on_focus_lost() override { m_selectionStart = m_selectionEnd = m_cursorPos; }
+    bool is_interactive() const override { return true; }
 
 private:
     std::string m_text;

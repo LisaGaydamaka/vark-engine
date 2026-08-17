@@ -73,6 +73,8 @@ public:
         return false;
     }
 
+    bool is_interactive() const override { return true; }
+
 private:
     std::string m_label;
     std::function<void()> m_onClick;

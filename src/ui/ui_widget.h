@@ -36,10 +36,13 @@ public:
     virtual bool on_mouse_move(float x, float y) { return false; }
     virtual bool on_key_down(int key, bool ctrl, bool shift) { return false; }
     virtual bool on_char(char c) { return false; }
-    virtual bool on_mouse_wheel(float delta, float x, float y) { return false; }  // <-- NEW
+    virtual bool on_mouse_wheel(float delta, float x, float y) { return false; }
 
     virtual bool hit_test(float x, float y) const { return m_rect.contains(x, y); }
     virtual bool is_priority_hit(float x, float y) const { return false; }
+
+    // ---- NEW: indicate if the widget handles mouse events ----
+    virtual bool is_interactive() const { return false; }
 
     virtual void render_all(UIRenderer* ui);
     virtual void layout_all();

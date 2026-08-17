@@ -30,6 +30,7 @@ public:
     bool on_mouse_down(float x, float y, int button) override;
     bool on_mouse_up(float x, float y, int button) override;
     bool on_mouse_move(float x, float y) override;
+    bool is_interactive() const override { return true; }
 
 private:
     bool is_on_handle(float x, float y) const;
@@ -38,6 +39,6 @@ private:
     Orientation m_orientation = Vertical;
     float m_ratio = 0.5f;
     float m_handleThickness = 4.0f;
-    float m_hitThickness = 0.0f;
+    float m_hitThickness = 20.0f;
     bool m_dragging = false;
 };
