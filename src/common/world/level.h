@@ -1,13 +1,13 @@
+// src/common/world/level.h
 #pragma once
 #include <vector>
-#include <string>
+#include <string>          // <-- added for std::string
 #include <array>
 #include <wrl/client.h>
 #include "core/math.h"
 #include "core/geometry.h"
 #include "renderer/renderer.h"
 #include "physics/physics_world.h"
-// #include "vmb_format.h"   // we can remove this later
 
 using Microsoft::WRL::ComPtr;
 
@@ -22,16 +22,18 @@ struct Brush {
     Vec3 color;
     std::array<FaceTexture, NUM_FACES> faces;
     int time = 0;
+    std::string name;          // <-- new member
+
     Brush() : shape(ShapeType::Box) {
         for (auto& f : faces) f = FaceTexture();
+        name = "Brush";        // default name, will be overwritten
     }
 };
 
 class Level {
 public:
-
     bool build(Renderer* renderer, const char* levelPath = nullptr);
-    bool load_vmis(const char* path, Renderer* renderer);  // NEW
+    bool load_vmis(const char* path, Renderer* renderer);
     void render(Renderer* renderer);
     void shutdown(Renderer* renderer);
 
@@ -42,10 +44,9 @@ public:
     void rebuild(Renderer* renderer) { build(renderer, nullptr); }
     void clear() { brushes.clear(); }
 
-    // ---- Debug mode ----
     void set_debug_mode(bool enabled);
     bool is_debug_mode() const { return m_debugMode; }
-    bool reload(Renderer* renderer);   // reload the current level file
+    bool reload(Renderer* renderer);
 
 private:
     struct Renderable {
@@ -62,9 +63,8 @@ private:
     std::vector<Renderable> labelRenderables;
     PhysicsWorld m_physicsWorld;
     std::vector<Triangle> m_collisionTriangles;
-    std::string m_levelPath;           // store the path used in build()
+    std::string m_levelPath;
 
-    // ---- Debug ----
     bool m_debugMode = false;
     Renderable m_debugRenderable;
     Renderable m_debugWireframe;

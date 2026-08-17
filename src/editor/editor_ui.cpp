@@ -1,9 +1,12 @@
+// src/editor/editor_ui.cpp
 #include "editor_ui.h"
 #include "editor/editor.h"
 #include "world/level.h"
 #include "core/logger.h"
 #include "imgui.h"
 #include <cstdio>
+#include <algorithm>      // <-- added for std::sort
+#include <vector>         // <-- added for std::vector (though already used)
 
 static void BuildMenuBar(Editor& editor);
 static void BuildLeftPanel(Editor& editor);
@@ -53,7 +56,7 @@ static void BuildMenuBar(Editor& editor) {
 }
 
 // ------------------------------------------------------------------
-// Left Panel – Brush List (docked to left edge)
+// Left Panel – Brush List with Time and Brush columns
 // ------------------------------------------------------------------
 static void BuildLeftPanel(Editor& editor) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -73,6 +76,7 @@ static void BuildLeftPanel(Editor& editor) {
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoSavedSettings);
 
+    // ---- Buttons ----
     if (ImGui::Button("Add Box")) {
         editor.add_brush(BrushType::Add, ShapeType::Box);
     }
@@ -84,33 +88,68 @@ static void BuildLeftPanel(Editor& editor) {
     if (ImGui::Button("Sub Box")) {
         editor.add_brush(BrushType::Sub, ShapeType::Box);
     }
+    ImGui::SameLine();
+    if (ImGui::Button("Sub Wedge")) {
+        editor.add_brush(BrushType::Sub, ShapeType::Wedge);
+    }
 
     ImGui::Separator();
 
+    // ---- Brush list with two columns: Time and Brush (name) ----
     const auto& brushes = editor.get_brushes();
     int selected = editor.get_selected_index();
 
     ImGui::BeginChild("BrushList", ImVec2(0, 0), true);
-    for (int i = 0; i < (int)brushes.size(); ++i) {
-        const auto& b = brushes[i];
-        char label[128];
-        snprintf(label, sizeof(label), "[%d] %s %s (%.1f, %.1f, %.1f)",
-                 b.time,
-                 (b.type == BrushType::Add) ? "Add" : "Sub",
-                 (b.shape == ShapeType::Box) ? "Box" : "Wedge",
-                 b.center.x, b.center.y, b.center.z);
-        if (ImGui::Selectable(label, (selected == i))) {
-            editor.select_brush(i);
-        }
-    }
-    ImGui::EndChild();
 
+    if (ImGui::BeginTable("BrushTable", 2,
+            ImGuiTableFlags_Resizable |
+            ImGuiTableFlags_NoBordersInBody |
+            ImGuiTableFlags_SizingStretchProp))
+    {
+        // Setup columns with headers
+        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+        ImGui::TableSetupColumn("Brush", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();   // <-- shows the headers
+
+        // Sort brushes by time (ascending)
+        std::vector<int> sortedIndices;
+        sortedIndices.resize(brushes.size());
+        for (int i = 0; i < (int)brushes.size(); ++i) sortedIndices[i] = i;
+        std::sort(sortedIndices.begin(), sortedIndices.end(),
+            [&](int a, int b) { return brushes[a].time < brushes[b].time; });
+
+        for (int idx : sortedIndices) {
+            const auto& b = brushes[idx];
+            bool isSelected = (idx == selected);
+
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+
+            // Selectable that spans the whole row (both columns)
+            char rowLabel[32];
+            snprintf(rowLabel, sizeof(rowLabel), "##row_%d", idx);
+            if (ImGui::Selectable(rowLabel, isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
+                editor.select_brush(idx);
+            }
+
+            // Draw the time in the first column (on top of the selectable)
+            ImGui::SameLine();
+            ImGui::Text("%d", b.time);
+
+            // Move to second column and draw the brush name
+            ImGui::TableSetColumnIndex(1);
+            ImGui::Text("%s", b.name.c_str());
+        }
+        ImGui::EndTable();
+    }
+
+    ImGui::EndChild();
     ImGui::End();
     ImGui::PopStyleVar();
 }
 
 // ------------------------------------------------------------------
-// Right Panel – Inspector (docked to right edge)
+// Right Panel – Inspector
 // ------------------------------------------------------------------
 static void BuildRightPanel(Editor& editor) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();

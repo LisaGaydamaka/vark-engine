@@ -1,6 +1,6 @@
 // src/editor/editor.cpp
 #include "editor.h"
-#include "editor_ui.h"          // for EditField enum
+#include "editor_ui.h"
 #include "core/logger.h"
 #include "core/geometry.h"
 #include "compiler/csg_solver.h"
@@ -63,7 +63,6 @@ void Editor::update(float dt) {
 void Editor::render() {
     if (!m_initialized) return;
 
-    // Brush wireframes
     rebuild_wireframe_buffer();
     if (m_wireframeBuffer && m_wireframeVertexCount > 0) {
         m_renderer->draw_lines(m_wireframeBuffer.Get(), m_wireframeVertexCount);
@@ -132,7 +131,6 @@ int Editor::pick_brush(int mouseX, int mouseY) {
 }
 
 Vec3 Editor::screen_to_world_ray(int mouseX, int mouseY) {
-    // Use renderer's actual width/height
     int width = m_renderer ? m_renderer->get_width() : 1280;
     int height = m_renderer ? m_renderer->get_height() : 720;
     if (width == 0 || height == 0) return {0,0,0};
@@ -275,6 +273,7 @@ void Editor::delete_selected() {
     m_selectedIndex = -1;
 }
 
+// ------ MODIFIED add_brush ------
 void Editor::add_brush(BrushType type, ShapeType shape) {
     Brush b;
     b.type = type;
@@ -282,9 +281,23 @@ void Editor::add_brush(BrushType type, ShapeType shape) {
     b.center = {0,0,0};
     b.size = {4,4,4};
     for (auto& f : b.faces) f = FaceTexture();
+
+    // Set time (max existing time + 1)
+    int newTime = 1;
+    for (const auto& existing : m_brushes) {
+        if (existing.time >= newTime) newTime = existing.time + 1;
+    }
+    b.time = newTime;
+
+    // Set name based on type and shape (no numbering)
+    std::string typeStr = (type == BrushType::Add) ? "Add" : "Sub";
+    std::string shapeStr = (shape == ShapeType::Box) ? "Box" : "Wedge";
+    b.name = typeStr + " " + shapeStr;
+
     m_brushes.push_back(b);
     m_selectedIndex = (int)m_brushes.size() - 1;
 }
+// ---------------------------------
 
 void Editor::select_brush(int index) {
     if (index >= 0 && index < (int)m_brushes.size()) {

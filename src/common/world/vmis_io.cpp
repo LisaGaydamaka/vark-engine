@@ -53,7 +53,7 @@ static Brush vmisbrush_to_brush(const VMISBrush& vb) {
     brush.type = (vb.type == 0) ? BrushType::Add : BrushType::Sub;
     brush.shape = (vb.shape == 0) ? ShapeType::Box : ShapeType::Wedge;
     brush.time = vb.time;
-    brush.color = { 1.0f, 1.0f, 1.0f };  // default
+    brush.color = { 1.0f, 1.0f, 1.0f };
 
     for (int i = 0; i < 6; ++i) {
         const auto& vf = vb.faces[i];
@@ -64,6 +64,12 @@ static Brush vmisbrush_to_brush(const VMISBrush& vb) {
         ft.rotation = vf.rotation;
         ft.worldLocked = (vf.worldLocked != 0);
     }
+
+    // ---- Set default name based on type and shape ----
+    std::string typeStr = (brush.type == BrushType::Add) ? "Add" : "Sub";
+    std::string shapeStr = (brush.shape == ShapeType::Box) ? "Box" : "Wedge";
+    brush.name = typeStr + " " + shapeStr;
+
     return brush;
 }
 
