@@ -4,9 +4,9 @@
 
 class UISplitter : public UIWidget {
 public:
-    enum Orientation { Horizontal, Vertical };
+    enum class Orientation { Horizontal, Vertical };
 
-    UISplitter(Orientation orient = Vertical, float initialRatio = 0.5f);
+    UISplitter(Orientation orient = Orientation::Vertical, float initialRatio = 0.5f);
     ~UISplitter() = default;
 
     void set_orientation(Orientation orient) { m_orientation = orient; }
@@ -22,7 +22,6 @@ public:
     void layout() override;
     void render(UIRenderer* ui) override;
 
-    // ---- Use priority hit for handle area, not restrictive hit_test ----
     bool is_priority_hit(float x, float y) const override {
         return is_on_handle(x, y);
     }
@@ -36,7 +35,7 @@ private:
     bool is_on_handle(float x, float y) const;
     void update_ratio_from_mouse(float x, float y);
 
-    Orientation m_orientation = Vertical;
+    Orientation m_orientation = Orientation::Vertical;
     float m_ratio = 0.5f;
     float m_handleThickness = 4.0f;
     float m_hitThickness = 20.0f;

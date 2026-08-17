@@ -2,9 +2,10 @@
 #include "ui_renderer.h"
 #include "ui_root.h"
 #include "core/logger.h"
+#include "ui_style.h"
 #include <algorithm>
 
-UIList::UIList() = default;
+UIList::UIList() : m_itemHeight(UIStyle::defaultItemHeight) {}
 
 void UIList::set_items(const std::vector<std::string>& labels) {
     m_items.clear();
@@ -36,7 +37,6 @@ void UIList::set_selected(int index) {
     }
 }
 
-// ---- FIX: division by zero guard ----
 int UIList::get_item_at_y(float y) const {
     if (m_itemHeight <= 0.0f) return -1;
     float relY = y - m_rect.y + m_scrollOffset;
@@ -77,7 +77,7 @@ void UIList::render(UIRenderer* ui) {
     ui->push_clip_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h);
 
     float itemHeight = m_itemHeight;
-    const float fontHeight = 8.0f;
+    const float fontHeight = UIStyle::fontSize;
     const float textOffsetY = (itemHeight - fontHeight) * 0.5f;
 
     int startIndex = (int)(m_scrollOffset / itemHeight);
@@ -92,22 +92,27 @@ void UIList::render(UIRenderer* ui) {
         bool hovered = (i == m_hoveredIndex && !m_dragging);
 
         if (selected) {
-            ui->draw_rect(m_rect.x, y, m_rect.w, itemHeight, 0.3f, 0.5f, 0.8f, 0.8f);
+            ui->draw_rect(m_rect.x, y, m_rect.w, itemHeight,
+                          UIStyle::listItemSelectedR, UIStyle::listItemSelectedG, UIStyle::listItemSelectedB, UIStyle::listItemSelectedA);
         } else if (hovered) {
-            ui->draw_rect(m_rect.x, y, m_rect.w, itemHeight, 0.3f, 0.3f, 0.3f, 0.5f);
+            ui->draw_rect(m_rect.x, y, m_rect.w, itemHeight,
+                          UIStyle::listItemHoverR, UIStyle::listItemHoverG, UIStyle::listItemHoverB, UIStyle::listItemHoverA);
         }
 
         if (m_dragging && i == m_dragCurrentIndex && i != m_dragStartIndex) {
-            ui->draw_rect(m_rect.x + 4, y - 1, m_rect.w - 8, 2, 1.0f, 1.0f, 0.0f, 1.0f);
+            ui->draw_rect(m_rect.x + 4, y - 1, m_rect.w - 8, 2,
+                          UIStyle::listDragIndicatorR, UIStyle::listDragIndicatorG, UIStyle::listDragIndicatorB, UIStyle::listDragIndicatorA);
         }
 
-        float r = selected ? 1.0f : 0.9f;
-        float g = selected ? 1.0f : 0.9f;
-        float b = selected ? 0.8f : 0.9f;
-        ui->draw_text(m_rect.x + 4.0f, y + textOffsetY, item.label.c_str(), r, g, b, 1.0f);
+        float r = selected ? UIStyle::listItemSelectedTextR : UIStyle::listItemTextR;
+        float g = selected ? UIStyle::listItemSelectedTextG : UIStyle::listItemTextG;
+        float b = selected ? UIStyle::listItemSelectedTextB : UIStyle::listItemTextB;
+        float a = selected ? UIStyle::listItemSelectedTextA : UIStyle::listItemTextA;
+        ui->draw_text(m_rect.x + 4.0f, y + textOffsetY, item.label.c_str(), r, g, b, a);
 
         y += itemHeight;
     }
+
 
     if (m_dragging && m_dragCurrentIndex == (int)m_items.size()) {
         float yLine = m_rect.y - m_scrollOffset + m_items.size() * itemHeight;
@@ -189,7 +194,6 @@ bool UIList::on_mouse_move(float x, float y) {
         m_dragCurrentIndex = index;
         return true;
     } else {
-        // ---- FIX: reset hover if outside ----
         if (!m_rect.contains(x, y)) {
             m_hoveredIndex = -1;
         } else {

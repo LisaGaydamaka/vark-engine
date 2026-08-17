@@ -224,7 +224,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     LOG_INFO("Creating UI root and widgets...");
     g_uiRoot = std::make_unique<UIRoot>();
 
-    auto splitter = std::make_unique<UISplitter>(UISplitter::Vertical, 0.3f);
+    auto splitter = std::make_unique<UISplitter>(UISplitter::Orientation::Vertical, 0.3f);
     splitter->set_rect(150.0f, 150.0f, 500.0f, 400.0f);
     splitter->set_hit_thickness(20.0f);
 

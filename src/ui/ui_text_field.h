@@ -32,7 +32,6 @@ private:
     int m_cursorPos = 0;
     int m_selectionStart = 0;
     int m_selectionEnd = 0;
-    // ---- FIX: moved from static to member ----
     float m_blinkAccumulator = 0.0f;
     bool m_cursorVisible = true;
     bool m_dragging = false;

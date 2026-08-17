@@ -2,12 +2,13 @@
 #include "ui_renderer.h"
 #include "ui_root.h"
 #include "core/logger.h"
+#include "ui_style.h"
 #include <algorithm>
 #include <cctype>
 #include <windows.h>
 
 UITextField::UITextField() {
-    set_rect(0, 0, 120, 20);
+    set_rect(0, 0, 120, UIStyle::defaultTextFieldHeight);
 }
 
 void UITextField::set_text(const std::string& text) {
@@ -18,17 +19,24 @@ void UITextField::set_text(const std::string& text) {
 
 void UITextField::render(UIRenderer* ui) {
     // Background
-    ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h, 0.15f, 0.15f, 0.2f, 1.0f);
+    ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h,
+                  UIStyle::textFieldBgR, UIStyle::textFieldBgG, UIStyle::textFieldBgB, UIStyle::textFieldBgA);
     // Border
-    ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, 1, 0.3f, 0.3f, 0.4f, 1.0f);
-    ui->draw_rect(m_rect.x, m_rect.y + m_rect.h - 1, m_rect.w, 1, 0.3f, 0.3f, 0.4f, 1.0f);
-    ui->draw_rect(m_rect.x, m_rect.y, 1, m_rect.h, 0.3f, 0.3f, 0.4f, 1.0f);
-    ui->draw_rect(m_rect.x + m_rect.w - 1, m_rect.y, 1, m_rect.h, 0.3f, 0.3f, 0.4f, 1.0f);
+    ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, 1,
+                  UIStyle::textFieldBorderR, UIStyle::textFieldBorderG, UIStyle::textFieldBorderB, UIStyle::textFieldBorderA);
+    ui->draw_rect(m_rect.x, m_rect.y + m_rect.h - 1, m_rect.w, 1,
+                  UIStyle::textFieldBorderR, UIStyle::textFieldBorderG, UIStyle::textFieldBorderB, UIStyle::textFieldBorderA);
+    ui->draw_rect(m_rect.x, m_rect.y, 1, m_rect.h,
+                  UIStyle::textFieldBorderR, UIStyle::textFieldBorderG, UIStyle::textFieldBorderB, UIStyle::textFieldBorderA);
+    ui->draw_rect(m_rect.x + m_rect.w - 1, m_rect.y, 1, m_rect.h,
+                  UIStyle::textFieldBorderR, UIStyle::textFieldBorderG, UIStyle::textFieldBorderB, UIStyle::textFieldBorderA);
 
-    ui->push_clip_rect(m_rect.x + 2, m_rect.y + 2, m_rect.w - 4, m_rect.h - 4);
+    float padX = UIStyle::textFieldPaddingX;
+    float padY = UIStyle::textFieldPaddingY;
+    ui->push_clip_rect(m_rect.x + padX, m_rect.y + padY, m_rect.w - 2*padX, m_rect.h - 2*padY);
 
     float textX = m_rect.x + 4.0f;
-    float textY = m_rect.y + (m_rect.h - 8.0f) * 0.5f;
+    float textY = m_rect.y + (m_rect.h - UIStyle::fontSize) * 0.5f;
 
     std::string display = m_text;
     if (display.empty() && !m_focused) {
@@ -38,19 +46,29 @@ void UITextField::render(UIRenderer* ui) {
     if (m_focused && m_selectionStart != m_selectionEnd) {
         int selStart = std::min(m_selectionStart, m_selectionEnd);
         int selEnd = std::max(m_selectionStart, m_selectionEnd);
-        float selX = textX + selStart * 8.0f;
-        float selW = (selEnd - selStart) * 8.0f;
-        ui->draw_rect(selX, m_rect.y + 2, selW, m_rect.h - 4, 0.3f, 0.5f, 0.8f, 0.8f);
+        float selX = textX + selStart * UIStyle::fontWidth;
+        float selW = (selEnd - selStart) * UIStyle::fontWidth;
+        ui->draw_rect(selX, m_rect.y + 2, selW, m_rect.h - 4,
+                      UIStyle::textFieldSelectionR, UIStyle::textFieldSelectionG, UIStyle::textFieldSelectionB, UIStyle::textFieldSelectionA);
     }
 
     if (!display.empty()) {
-        float r = m_focused ? 1.0f : 0.7f;
-        float g = m_focused ? 1.0f : 0.7f;
-        float b = m_focused ? 1.0f : 0.7f;
-        ui->draw_text(textX, textY, display.c_str(), r, g, b, 1.0f);
+        float r, g, b, a;
+        if (m_focused || !m_text.empty()) {
+            r = UIStyle::textFieldTextR;
+            g = UIStyle::textFieldTextG;
+            b = UIStyle::textFieldTextB;
+            a = UIStyle::textFieldTextA;
+        } else {
+            // placeholder
+            r = UIStyle::textFieldPlaceholderR;
+            g = UIStyle::textFieldPlaceholderG;
+            b = UIStyle::textFieldPlaceholderB;
+            a = UIStyle::textFieldPlaceholderA;
+        }
+        ui->draw_text(textX, textY, display.c_str(), r, g, b, a);
     }
 
-    // ---- FIX: cursor blink using member variables ----
     if (m_focused && m_selectionStart == m_selectionEnd) {
         m_blinkAccumulator += 1.0f / 60.0f;
         if (m_blinkAccumulator > 0.5f) {
@@ -58,7 +76,7 @@ void UITextField::render(UIRenderer* ui) {
             m_blinkAccumulator = 0.0f;
         }
         if (m_cursorVisible) {
-            float cursorX = textX + m_cursorPos * 8.0f;
+            float cursorX = textX + m_cursorPos * UIStyle::fontWidth;
             ui->draw_rect(cursorX, m_rect.y + 2, 1.0f, m_rect.h - 4, 1.0f, 1.0f, 1.0f, 1.0f);
         }
     } else {
@@ -77,7 +95,7 @@ bool UITextField::on_mouse_down(float x, float y, int button) {
     if (root) root->set_capture(this, true);
 
     float relX = x - (m_rect.x + 4.0f);
-    int pos = (int)(relX / 8.0f);
+    int pos = (int)(relX / UIStyle::fontWidth);
     if (pos < 0) pos = 0;
     if (pos > (int)m_text.size()) pos = (int)m_text.size();
     m_cursorPos = pos;
@@ -96,7 +114,7 @@ bool UITextField::on_mouse_up(float x, float y, int button) {
 bool UITextField::on_mouse_move(float x, float y) {
     if (m_dragging) {
         float relX = x - (m_rect.x + 4.0f);
-        int pos = (int)(relX / 8.0f);
+        int pos = (int)(relX / UIStyle::fontWidth);
         if (pos < 0) pos = 0;
         if (pos > (int)m_text.size()) pos = (int)m_text.size();
         m_cursorPos = pos;

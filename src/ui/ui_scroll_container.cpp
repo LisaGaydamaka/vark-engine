@@ -3,10 +3,12 @@
 #include "ui_root.h"
 #include "ui_list.h"
 #include "core/logger.h"
+#include "ui_style.h"
 #include <algorithm>
 
 UIScrollContainer::UIScrollContainer() {
-    auto sb = std::make_unique<UIScrollBar>(UIScrollBar::Vertical);
+    m_scrollbarWidth = UIStyle::scrollbarWidth;
+    auto sb = std::make_unique<UIScrollBar>(UIScrollBar::Orientation::Vertical);
     m_scrollbar = sb.get();
     m_scrollbar->set_parent(this);
     add_child(std::move(sb));

@@ -5,9 +5,9 @@
 
 class UIScrollBar : public UIWidget {
 public:
-    enum Orientation { Vertical, Horizontal };
+    enum class Orientation { Vertical, Horizontal };
 
-    UIScrollBar(Orientation orient = Vertical);
+    UIScrollBar(Orientation orient = Orientation::Vertical);
 
     void set_range(float min, float max);
     void set_value(float val);
@@ -15,7 +15,6 @@ public:
 
     void set_on_value_changed(std::function<void(float)> callback) { m_onValueChanged = callback; }
 
-    // ---- NEW: interactive ----
     bool is_interactive() const override { return true; }
 
     void render(UIRenderer* ui) override;

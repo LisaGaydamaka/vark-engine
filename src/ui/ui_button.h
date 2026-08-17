@@ -2,6 +2,7 @@
 #include "ui_widget.h"
 #include "ui_root.h"
 #include "common/core/logger.h"
+#include "ui_style.h"
 #include <functional>
 #include <string>
 
@@ -14,27 +15,40 @@ public:
     void set_on_click(std::function<void()> callback) { m_onClick = callback; }
 
     void render(UIRenderer* ui) override {
-        // Determine colors based on state
-        float r = 0.2f, g = 0.3f, b = 0.5f, a = 1.0f;
+        float r, g, b, a;
         if (m_pressed) {
-            r = 0.1f; g = 0.2f; b = 0.4f;
+            r = UIStyle::buttonPressedR;
+            g = UIStyle::buttonPressedG;
+            b = UIStyle::buttonPressedB;
+            a = UIStyle::buttonPressedA;
         } else if (m_hovered) {
-            r = 0.3f; g = 0.4f; b = 0.6f;
+            r = UIStyle::buttonHoverR;
+            g = UIStyle::buttonHoverG;
+            b = UIStyle::buttonHoverB;
+            a = UIStyle::buttonHoverA;
+        } else {
+            r = UIStyle::buttonNormalR;
+            g = UIStyle::buttonNormalG;
+            b = UIStyle::buttonNormalB;
+            a = UIStyle::buttonNormalA;
         }
 
-        // Main body
         ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h, r, g, b, a);
 
-        // Border – top, bottom, left, right (8 args each)
-        ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, 1.0f, 0.7f, 0.7f, 0.7f, 1.0f);
-        ui->draw_rect(m_rect.x, m_rect.y + m_rect.h - 1.0f, m_rect.w, 1.0f, 0.3f, 0.3f, 0.3f, 1.0f);
-        ui->draw_rect(m_rect.x, m_rect.y, 1.0f, m_rect.h, 0.7f, 0.7f, 0.7f, 1.0f);
-        ui->draw_rect(m_rect.x + m_rect.w - 1.0f, m_rect.y, 1.0f, m_rect.h, 0.3f, 0.3f, 0.3f, 1.0f);
+        // Border – top, bottom, left, right
+        ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, 1.0f,
+                      UIStyle::buttonBorderLightR, UIStyle::buttonBorderLightG, UIStyle::buttonBorderLightB, UIStyle::buttonBorderLightA);
+        ui->draw_rect(m_rect.x, m_rect.y + m_rect.h - 1.0f, m_rect.w, 1.0f,
+                      UIStyle::buttonBorderDarkR, UIStyle::buttonBorderDarkG, UIStyle::buttonBorderDarkB, UIStyle::buttonBorderDarkA);
+        ui->draw_rect(m_rect.x, m_rect.y, 1.0f, m_rect.h,
+                      UIStyle::buttonBorderLightR, UIStyle::buttonBorderLightG, UIStyle::buttonBorderLightB, UIStyle::buttonBorderLightA);
+        ui->draw_rect(m_rect.x + m_rect.w - 1.0f, m_rect.y, 1.0f, m_rect.h,
+                      UIStyle::buttonBorderDarkR, UIStyle::buttonBorderDarkG, UIStyle::buttonBorderDarkB, UIStyle::buttonBorderDarkA);
 
-        // Label
         float labelX = m_rect.x + 8.0f;
-        float labelY = m_rect.y + (m_rect.h - 8.0f) * 0.5f;
-        ui->draw_text(labelX, labelY, m_label.c_str(), 1.0f, 1.0f, 1.0f, 1.0f);
+        float labelY = m_rect.y + (m_rect.h - UIStyle::fontSize) * 0.5f;
+        ui->draw_text(labelX, labelY, m_label.c_str(),
+                      UIStyle::buttonTextR, UIStyle::buttonTextG, UIStyle::buttonTextB, UIStyle::buttonTextA);
     }
 
     bool on_mouse_down(float x, float y, int button) override {

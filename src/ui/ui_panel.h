@@ -1,10 +1,20 @@
 #pragma once
 #include "ui_widget.h"
+#include "ui_style.h"
 
 class UIPanel : public UIWidget {
 public:
-    UIPanel() = default;
-    ~UIPanel() = default;
+    UIPanel() {
+        // Default colours from style
+        m_bgR = UIStyle::panelBgR;
+        m_bgG = UIStyle::panelBgG;
+        m_bgB = UIStyle::panelBgB;
+        m_bgA = UIStyle::panelBgA;
+        m_borderR = UIStyle::panelBorderR;
+        m_borderG = UIStyle::panelBorderG;
+        m_borderB = UIStyle::panelBorderB;
+        m_borderA = UIStyle::panelBorderA;
+    }
 
     void set_background(float r, float g, float b, float a) {
         m_bgR = r; m_bgG = g; m_bgB = b; m_bgA = a;
@@ -33,7 +43,7 @@ public:
     }
 
 private:
-    float m_bgR = 0.1f, m_bgG = 0.1f, m_bgB = 0.2f, m_bgA = 1.0f;
-    float m_borderR = 0.5f, m_borderG = 0.5f, m_borderB = 0.5f, m_borderA = 0.0f;
+    float m_bgR, m_bgG, m_bgB, m_bgA;
+    float m_borderR, m_borderG, m_borderB, m_borderA;
     float m_borderThickness = 1.0f;
 };

@@ -15,13 +15,11 @@ public:
     void set_selected(int index);
     int get_selected() const { return m_selected; }
 
-    // ---- Scroll support ----
     void set_scroll_offset(float offset) { m_scrollOffset = offset; }
     float get_scroll_offset() const { return m_scrollOffset; }
     float get_total_height() const { return m_items.size() * m_itemHeight; }
     float get_content_height() const override { return get_total_height(); }
 
-    // ---- NEW: interactive ----
     bool is_interactive() const override { return true; }
 
     void set_on_selection_changed(std::function<void(int)> callback) { m_onSelectionChanged = callback; }

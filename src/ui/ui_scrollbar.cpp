@@ -2,6 +2,7 @@
 #include "ui_renderer.h"
 #include "ui_root.h"
 #include "core/logger.h"
+#include "ui_style.h"
 #include <algorithm>
 
 UIScrollBar::UIScrollBar(Orientation orient) : m_orientation(orient) {}
@@ -23,7 +24,7 @@ void UIScrollBar::set_value(float val) {
 }
 
 float UIScrollBar::get_track_length() const {
-    return (m_orientation == Vertical) ? m_rect.h : m_rect.w;
+    return (m_orientation == Orientation::Vertical) ? m_rect.h : m_rect.w;
 }
 
 float UIScrollBar::get_thumb_position() const {
@@ -48,13 +49,13 @@ void UIScrollBar::update_thumb_size() {
 }
 
 void UIScrollBar::render(UIRenderer* ui) {
-    float r = 0.2f, g = 0.2f, b = 0.25f, a = 1.0f;
-    ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h, r, g, b, a);
+    ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h,
+                  UIStyle::scrollbarTrackR, UIStyle::scrollbarTrackG, UIStyle::scrollbarTrackB, UIStyle::scrollbarTrackA);
 
     if (m_thumbSize > 0.0f) {
         float thumbPos = get_thumb_position();
         float thumbX, thumbY, thumbW, thumbH;
-        if (m_orientation == Vertical) {
+        if (m_orientation == Orientation::Vertical) {
             thumbX = m_rect.x + 2.0f;
             thumbY = m_rect.y + thumbPos;
             thumbW = m_rect.w - 4.0f;
@@ -65,13 +66,19 @@ void UIScrollBar::render(UIRenderer* ui) {
             thumbW = m_thumbSize;
             thumbH = m_rect.h - 4.0f;
         }
-        ui->draw_rect(thumbX, thumbY, thumbW, thumbH, 0.5f, 0.5f, 0.6f, 1.0f);
-        ui->draw_rect(thumbX, thumbY, thumbW, 1, 0.7f, 0.7f, 0.8f, 1.0f);
-        ui->draw_rect(thumbX, thumbY + thumbH - 1, thumbW, 1, 0.3f, 0.3f, 0.4f, 1.0f);
-        ui->draw_rect(thumbX, thumbY, 1, thumbH, 0.7f, 0.7f, 0.8f, 1.0f);
-        ui->draw_rect(thumbX + thumbW - 1, thumbY, 1, thumbH, 0.3f, 0.3f, 0.4f, 1.0f);
+        ui->draw_rect(thumbX, thumbY, thumbW, thumbH,
+                      UIStyle::scrollbarThumbR, UIStyle::scrollbarThumbG, UIStyle::scrollbarThumbB, UIStyle::scrollbarThumbA);
+        ui->draw_rect(thumbX, thumbY, thumbW, 1,
+                      UIStyle::scrollbarThumbBorderLightR, UIStyle::scrollbarThumbBorderLightG, UIStyle::scrollbarThumbBorderLightB, UIStyle::scrollbarThumbBorderLightA);
+        ui->draw_rect(thumbX, thumbY + thumbH - 1, thumbW, 1,
+                      UIStyle::scrollbarThumbBorderDarkR, UIStyle::scrollbarThumbBorderDarkG, UIStyle::scrollbarThumbBorderDarkB, UIStyle::scrollbarThumbBorderDarkA);
+        ui->draw_rect(thumbX, thumbY, 1, thumbH,
+                      UIStyle::scrollbarThumbBorderLightR, UIStyle::scrollbarThumbBorderLightG, UIStyle::scrollbarThumbBorderLightB, UIStyle::scrollbarThumbBorderLightA);
+        ui->draw_rect(thumbX + thumbW - 1, thumbY, 1, thumbH,
+                      UIStyle::scrollbarThumbBorderDarkR, UIStyle::scrollbarThumbBorderDarkG, UIStyle::scrollbarThumbBorderDarkB, UIStyle::scrollbarThumbBorderDarkA);
     }
 }
+
 
 bool UIScrollBar::on_mouse_down(float x, float y, int button) {
     if (button != 0) return false;
@@ -79,7 +86,7 @@ bool UIScrollBar::on_mouse_down(float x, float y, int button) {
 
     float thumbPos = get_thumb_position();
     float thumbStart, thumbEnd;
-    if (m_orientation == Vertical) {
+    if (m_orientation == Orientation::Vertical) {
         thumbStart = m_rect.y + thumbPos;
         thumbEnd = thumbStart + m_thumbSize;
         if (y >= thumbStart && y <= thumbEnd) {
@@ -142,7 +149,6 @@ bool UIScrollBar::on_mouse_up(float x, float y, int button) {
         }
         return true;
     }
-    // Safety reset if dragging left on
     if (m_dragging) {
         m_dragging = false;
         UIRoot* root = get_root();
@@ -159,7 +165,7 @@ bool UIScrollBar::on_mouse_move(float x, float y) {
         float range = m_max - m_min;
         if (range == 0.0f || trackLen <= 0.0f) return true;
         float pos;
-        if (m_orientation == Vertical) {
+        if (m_orientation == Orientation::Vertical) {
             pos = y - m_rect.y - m_dragOffset;
         } else {
             pos = x - m_rect.x - m_dragOffset;

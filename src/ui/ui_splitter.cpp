@@ -1,10 +1,14 @@
 #include "ui_splitter.h"
 #include "ui_root.h"
 #include "ui_renderer.h"
+#include "ui_style.h"
 #include <algorithm>
 
 UISplitter::UISplitter(Orientation orient, float initialRatio)
-    : m_orientation(orient), m_ratio(initialRatio) {}
+    : m_orientation(orient), m_ratio(initialRatio) {
+    m_handleThickness = UIStyle::splitterHandleThickness;
+    m_hitThickness = UIStyle::splitterHitThickness;
+}
 
 void UISplitter::layout() {
     if (m_children.size() != 2) return;
@@ -17,7 +21,7 @@ void UISplitter::layout() {
     float w = m_rect.w;
     float h = m_rect.h;
 
-    if (m_orientation == Vertical) {
+    if (m_orientation == Orientation::Vertical) {
         float firstW = w * m_ratio;
         float secondW = w - firstW - m_handleThickness;
         first->set_rect(x, y, firstW, h);
@@ -39,7 +43,7 @@ void UISplitter::render(UIRenderer* ui) {
     UIWidget* first = m_children[0].get();
 
     float x, y, w, h;
-    if (m_orientation == Vertical) {
+    if (m_orientation == Orientation::Vertical) {
         x = first->get_rect().x + first->get_rect().w;
         y = m_rect.y;
         w = m_handleThickness;
@@ -51,24 +55,32 @@ void UISplitter::render(UIRenderer* ui) {
         h = m_handleThickness;
     }
 
-    ui->draw_rect(x, y, w, h, 0.4f, 0.4f, 0.4f, 1.0f);
-    ui->draw_rect(x, y, w, 1, 0.5f, 0.5f, 0.5f, 1.0f);
-    ui->draw_rect(x, y + h - 1, w, 1, 0.3f, 0.3f, 0.3f, 1.0f);
-    if (m_orientation == Vertical) {
-        ui->draw_rect(x, y, 1, h, 0.5f, 0.5f, 0.5f, 1.0f);
-        ui->draw_rect(x + w - 1, y, 1, h, 0.3f, 0.3f, 0.3f, 1.0f);
+    ui->draw_rect(x, y, w, h,
+                  UIStyle::splitterHandleR, UIStyle::splitterHandleG, UIStyle::splitterHandleB, UIStyle::splitterHandleA);
+    ui->draw_rect(x, y, w, 1,
+                  UIStyle::splitterHandleBorderLightR, UIStyle::splitterHandleBorderLightG, UIStyle::splitterHandleBorderLightB, UIStyle::splitterHandleBorderLightA);
+    ui->draw_rect(x, y + h - 1, w, 1,
+                  UIStyle::splitterHandleBorderDarkR, UIStyle::splitterHandleBorderDarkG, UIStyle::splitterHandleBorderDarkB, UIStyle::splitterHandleBorderDarkA);
+    if (m_orientation == Orientation::Vertical) {
+        ui->draw_rect(x, y, 1, h,
+                      UIStyle::splitterHandleBorderLightR, UIStyle::splitterHandleBorderLightG, UIStyle::splitterHandleBorderLightB, UIStyle::splitterHandleBorderLightA);
+        ui->draw_rect(x + w - 1, y, 1, h,
+                      UIStyle::splitterHandleBorderDarkR, UIStyle::splitterHandleBorderDarkG, UIStyle::splitterHandleBorderDarkB, UIStyle::splitterHandleBorderDarkA);
     } else {
-        ui->draw_rect(x, y, w, 1, 0.5f, 0.5f, 0.5f, 1.0f);
-        ui->draw_rect(x, y + h - 1, w, 1, 0.3f, 0.3f, 0.3f, 1.0f);
+        ui->draw_rect(x, y, w, 1,
+                      UIStyle::splitterHandleBorderLightR, UIStyle::splitterHandleBorderLightG, UIStyle::splitterHandleBorderLightB, UIStyle::splitterHandleBorderLightA);
+        ui->draw_rect(x, y + h - 1, w, 1,
+                      UIStyle::splitterHandleBorderDarkR, UIStyle::splitterHandleBorderDarkG, UIStyle::splitterHandleBorderDarkB, UIStyle::splitterHandleBorderDarkA);
     }
 }
+
 
 bool UISplitter::is_on_handle(float x, float y) const {
     if (m_children.size() != 2) return false;
 
     UIWidget* first = m_children[0].get();
     float handleX, handleY, handleW, handleH;
-    if (m_orientation == Vertical) {
+    if (m_orientation == Orientation::Vertical) {
         float halfHit = m_hitThickness * 0.5f;
         handleX = first->get_rect().x + first->get_rect().w - halfHit;
         handleY = m_rect.y;
@@ -90,7 +102,7 @@ void UISplitter::update_ratio_from_mouse(float x, float y) {
     if (m_children.size() != 2) return;
 
     float newRatio = m_ratio;
-    if (m_orientation == Vertical) {
+    if (m_orientation == Orientation::Vertical) {
         float totalW = m_rect.w - m_handleThickness;
         if (totalW <= 0) return;
         float mouseX = x - m_rect.x;
@@ -129,7 +141,6 @@ bool UISplitter::on_mouse_up(float x, float y, int button) {
     return false;
 }
 
-// ---- FIX: force layout after ratio change ----
 bool UISplitter::on_mouse_move(float x, float y) {
     if (m_dragging) {
         update_ratio_from_mouse(x, y);
