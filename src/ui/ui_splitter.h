@@ -38,6 +38,6 @@ private:
     Orientation m_orientation = Vertical;
     float m_ratio = 0.5f;
     float m_handleThickness = 4.0f;
-    float m_hitThickness = 20.0f;
+    float m_hitThickness = 0.0f;
     bool m_dragging = false;
 };

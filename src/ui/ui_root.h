@@ -16,6 +16,7 @@ public:
     bool on_mouse_move(float x, float y) override;
     bool on_key_down(int key, bool ctrl, bool shift) override;
     bool on_char(char c) override;
+    bool on_mouse_wheel(float delta, float x, float y) override;   // <-- NEW
 
     void set_capture(UIWidget* widget, bool capture);
     UIWidget* get_captured_widget() const { return m_capturedWidget; }

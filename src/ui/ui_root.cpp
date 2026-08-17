@@ -43,13 +43,10 @@ bool UIRoot::on_mouse_down(float x, float y, int button) {
     UIWidget* target = find_widget_at(x, y);
     if (target) {
         LOG_INFO("UI: target found: %s", typeid(*target).name());
-        // If there is a focused widget and the target is not the focused widget,
-        // clear focus.
         if (m_focusedWidget && target != m_focusedWidget) {
             LOG_INFO("UI: target different from focused, unfocusing");
             set_focused_widget(nullptr);
         }
-        // Let the target handle the click (it may request focus)
         bool consumed = target->on_mouse_down(x, y, button);
         return consumed;
     } else {
@@ -63,6 +60,7 @@ bool UIRoot::on_mouse_down(float x, float y, int button) {
 
 bool UIRoot::on_mouse_up(float x, float y, int button) {
     if (m_capturedWidget) {
+        LOG_INFO("UI: on_mouse_up delivered to captured widget %s", typeid(*m_capturedWidget).name());
         bool consumed = m_capturedWidget->on_mouse_up(x, y, button);
         set_capture(m_capturedWidget, false);
         return consumed;
@@ -119,9 +117,11 @@ bool UIRoot::on_char(char c) {
 void UIRoot::set_capture(UIWidget* widget, bool capture) {
     if (capture) {
         m_capturedWidget = widget;
+        LOG_INFO("UI: capture set to %s", widget ? typeid(*widget).name() : "null");
     } else {
         if (m_capturedWidget == widget) {
             m_capturedWidget = nullptr;
+            LOG_INFO("UI: capture released");
         }
     }
 }
@@ -141,4 +141,15 @@ void UIRoot::set_focused_widget(UIWidget* widget) {
         LOG_INFO("UI: focusing new widget");
         widget->set_focus(true);
     }
+}
+
+// ---- NEW: Mouse wheel handling with bubble-up ----
+bool UIRoot::on_mouse_wheel(float delta, float x, float y) {
+    UIWidget* target = find_widget_at(x, y);
+    while (target) {
+        if (target->on_mouse_wheel(delta, x, y))
+            return true;
+        target = target->get_parent();
+    }
+    return false;
 }

@@ -20,6 +20,7 @@
 #include "ui/ui_splitter.h"
 #include "ui/ui_list.h"
 #include "ui/ui_text_field.h"
+#include "ui/ui_scroll_container.h"
 
 static HWND g_hwnd = nullptr;
 static Renderer g_renderer;
@@ -49,6 +50,17 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_MOUSEWHEEL: {
             int delta = GET_WHEEL_DELTA_WPARAM(wParam);
             g_editor.on_mouse_wheel(delta);
+
+            // Get mouse position in client coordinates
+            int screenX = GET_X_LPARAM(lParam);
+            int screenY = GET_Y_LPARAM(lParam);
+            POINT pt = { screenX, screenY };
+            ScreenToClient(g_hwnd, &pt);
+
+            if (g_uiRoot) {
+                // Normalize delta: 1.0 = one scroll notch
+                g_uiRoot->on_mouse_wheel((float)delta / 120.0f, (float)pt.x, (float)pt.y);
+            }
             return 0;
         }
         case WM_MOUSEMOVE: {
@@ -212,9 +224,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     LOG_INFO("Creating UI root and widgets...");
     g_uiRoot = std::make_unique<UIRoot>();
 
-    // ---- FIXED SMALL SPLITTER for testing performance ----
     auto splitter = std::make_unique<UISplitter>(UISplitter::Vertical, 0.3f);
-    splitter->set_rect(150.0f, 150.0f, 500.0f, 400.0f);   // small, not fullscreen
+    splitter->set_rect(150.0f, 150.0f, 500.0f, 400.0f);
     splitter->set_hit_thickness(20.0f);
 
     auto leftContainer = std::make_unique<UIContainer>();
@@ -224,16 +235,14 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     leftBg->set_background(0.15f, 0.15f, 0.2f, 1.0f);
     leftBg->set_border(0.3f, 0.3f, 0.4f, 1.0f, 1.0f);
 
+    // ---- Create list ----
     auto list = std::make_unique<UIList>();
-
-    // ---- 200 items for performance test ----
     std::vector<std::pair<std::string, int>> brushItems;
     for (int i = 0; i < 200; ++i) {
         std::string label = "Brush " + std::to_string(i) + " (Item)";
         brushItems.push_back({label, i});
     }
     list->set_items(brushItems);
-
     list->set_on_selection_changed([](int idx) {
         LOG_INFO("UIList: selection changed to index %d", idx);
     });
@@ -245,8 +254,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         LOG_INFO("%s", log.c_str());
     });
 
+    // ---- Wrap list in scroll container ----
+    auto scrollContainer = std::make_unique<UIScrollContainer>();
+    scrollContainer->set_scrollbar_width(16.0f);
+    scrollContainer->set_child(std::move(list));
+
     leftContainer->add_child(std::move(leftBg));
-    leftContainer->add_child(std::move(list));
+    leftContainer->add_child(std::move(scrollContainer)); // instead of list directly
 
     auto rightContainer = std::make_unique<UIContainer>();
     rightContainer->set_layout(std::make_unique<UIFillLayout>());

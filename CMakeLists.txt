@@ -96,6 +96,8 @@ add_library(vark_ui STATIC
     src/ui/ui_splitter.cpp   # <-- ADD
     src/ui/ui_list.cpp
     src/ui/ui_text_field.cpp      # <-- ADD THIS
+    src/ui/ui_scrollbar.cpp      # <-- ADD THIS
+    src/ui/ui_scroll_container.cpp      # <-- ADD THIS
 )
 target_compile_definitions(vark_ui PRIVATE NOMINMAX)
 target_include_directories(vark_ui PUBLIC

@@ -9,16 +9,19 @@ public:
     UIList();
     ~UIList() = default;
 
-    // Set items (each with a label and an associated data value)
     void set_items(const std::vector<std::string>& labels);
     void set_items(const std::vector<std::pair<std::string, int>>& items);
 
-    void set_selected(int index);          // index in the items list
+    void set_selected(int index);
     int get_selected() const { return m_selected; }
 
-    // Callback when selection changes: parameter is the new selected index, or -1 if none
+    // ---- Scroll support ----
+    void set_scroll_offset(float offset) { m_scrollOffset = offset; }
+    float get_scroll_offset() const { return m_scrollOffset; }
+    float get_total_height() const { return m_items.size() * m_itemHeight; }
+    float get_content_height() const override { return get_total_height(); }
+
     void set_on_selection_changed(std::function<void(int)> callback) { m_onSelectionChanged = callback; }
-    // Callback when items are reordered: parameter is the new order (list of indices)
     void set_on_reordered(std::function<void(const std::vector<int>&)> callback) { m_onReordered = callback; }
 
     void render(UIRenderer* ui) override;
@@ -29,23 +32,22 @@ public:
 private:
     struct Item {
         std::string label;
-        int data;   // user‑defined value (e.g., brush index)
+        int data;
     };
     std::vector<Item> m_items;
     int m_selected = -1;
     int m_hoveredIndex = -1;
     float m_itemHeight = 20.0f;
+    float m_scrollOffset = 0.0f;   // pixel offset from top
+
     std::function<void(int)> m_onSelectionChanged;
     std::function<void(const std::vector<int>&)> m_onReordered;
 
-    // Drag state
     bool m_dragging = false;
     int m_dragStartIndex = -1;
-    int m_dragCurrentIndex = -1;  // where the item would be inserted
-    float m_dragOffsetY = 0.0f;   // offset from top of item to mouse
+    int m_dragCurrentIndex = -1;
+    float m_dragOffsetY = 0.0f;
 
-    // Helper: get the index of the item at the given Y coordinate (relative to list rect)
     int get_item_at_y(float y) const;
-    // Helper: reorder items: move item from 'from' to 'to' (insert before 'to')
     void reorder_items(int from, int to);
 };

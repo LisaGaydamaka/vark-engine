@@ -4,7 +4,7 @@
 
 void UIWidget::add_child(std::unique_ptr<UIWidget> child) {
     if (child) {
-        child->m_parent = this;
+        child->set_parent(this);   // use set_parent instead of direct access
         m_children.push_back(std::move(child));
     }
 }

@@ -22,6 +22,8 @@ public:
     const UIRect& get_rect() const { return m_rect; }
 
     UIWidget* get_parent() const { return m_parent; }
+    void set_parent(UIWidget* parent) { m_parent = parent; }
+
     void add_child(std::unique_ptr<UIWidget> child);
     const std::vector<std::unique_ptr<UIWidget>>& get_children() const { return m_children; }
 
@@ -34,6 +36,7 @@ public:
     virtual bool on_mouse_move(float x, float y) { return false; }
     virtual bool on_key_down(int key, bool ctrl, bool shift) { return false; }
     virtual bool on_char(char c) { return false; }
+    virtual bool on_mouse_wheel(float delta, float x, float y) { return false; }  // <-- NEW
 
     virtual bool hit_test(float x, float y) const { return m_rect.contains(x, y); }
     virtual bool is_priority_hit(float x, float y) const { return false; }
@@ -42,12 +45,15 @@ public:
     virtual void layout_all();
 
     // ---- Focus management ----
-    void request_focus();   // call this to ask for focus
-    void set_focus(bool focused);  // called by root
+    void request_focus();
+    void set_focus(bool focused);
     virtual void on_focus_gained() {}
     virtual void on_focus_lost() {}
 
     bool is_focused() const { return m_focused; }
+
+    // ---- Content height (for scrolling) ----
+    virtual float get_content_height() const { return 0.0f; }
 
 protected:
     UIRect m_rect = {0, 0, 0, 0};

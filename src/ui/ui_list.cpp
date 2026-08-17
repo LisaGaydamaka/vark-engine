@@ -14,6 +14,7 @@ void UIList::set_items(const std::vector<std::string>& labels) {
     }
     m_selected = -1;
     m_dragging = false;
+    m_scrollOffset = 0.0f;
 }
 
 void UIList::set_items(const std::vector<std::pair<std::string, int>>& items) {
@@ -24,6 +25,7 @@ void UIList::set_items(const std::vector<std::pair<std::string, int>>& items) {
     }
     m_selected = -1;
     m_dragging = false;
+    m_scrollOffset = 0.0f;
 }
 
 void UIList::set_selected(int index) {
@@ -35,7 +37,7 @@ void UIList::set_selected(int index) {
 }
 
 int UIList::get_item_at_y(float y) const {
-    float relY = y - m_rect.y;
+    float relY = y - m_rect.y + m_scrollOffset; // account for scroll offset
     int index = (int)(relY / m_itemHeight);
     if (index < 0) return -1;
     if (index >= (int)m_items.size()) return -1;
@@ -69,7 +71,6 @@ void UIList::reorder_items(int from, int to) {
     }
 }
 
-// ---- render with viewport culling and performance logging ----
 void UIList::render(UIRenderer* ui) {
     ui->push_clip_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h);
 
@@ -77,41 +78,28 @@ void UIList::render(UIRenderer* ui) {
     const float fontHeight = 8.0f;
     const float textOffsetY = (itemHeight - fontHeight) * 0.5f;
 
-    // Compute how many items fit in the visible area
-    int maxVisible = 0;
-    if (itemHeight > 0.0f) {
-        maxVisible = (int)(m_rect.h / itemHeight) + 1;   // +1 for partial last item
-    }
-    int endIndex = std::min((int)m_items.size(), maxVisible);
+    // Compute visible range based on scroll offset
+    int startIndex = (int)(m_scrollOffset / itemHeight);
+    int endIndex = startIndex + (int)(m_rect.h / itemHeight) + 2; // +2 for safety
+    startIndex = std::max(0, startIndex);
+    endIndex = std::min((int)m_items.size(), endIndex);
 
-    // ---- PERFORMANCE LOG: show how many items we actually draw ----
-    static int frameCounter = 0;
-    ++frameCounter;
-    // Log every 60 frames to avoid spam, but you can remove the condition for every frame
-    if (frameCounter % 60 == 0) {
-        LOG_INFO("UIList: rendering %d of %d items (visible height = %.1f, itemHeight = %.1f)",
-                 endIndex, (int)m_items.size(), m_rect.h, itemHeight);
-    }
-
-    float y = m_rect.y;
-    for (int i = 0; i < endIndex; ++i) {
+    float y = m_rect.y - m_scrollOffset + startIndex * itemHeight;
+    for (int i = startIndex; i < endIndex; ++i) {
         const Item& item = m_items[i];
         bool selected = (i == m_selected);
         bool hovered = (i == m_hoveredIndex && !m_dragging);
 
-        // Background for selected/hover
         if (selected) {
             ui->draw_rect(m_rect.x, y, m_rect.w, itemHeight, 0.3f, 0.5f, 0.8f, 0.8f);
         } else if (hovered) {
             ui->draw_rect(m_rect.x, y, m_rect.w, itemHeight, 0.3f, 0.3f, 0.3f, 0.5f);
         }
 
-        // Draw insertion line if dragging and this is the target
         if (m_dragging && i == m_dragCurrentIndex && i != m_dragStartIndex) {
             ui->draw_rect(m_rect.x + 4, y - 1, m_rect.w - 8, 2, 1.0f, 1.0f, 0.0f, 1.0f);
         }
 
-        // Label
         float r = selected ? 1.0f : 0.9f;
         float g = selected ? 1.0f : 0.9f;
         float b = selected ? 0.8f : 0.9f;
@@ -120,10 +108,9 @@ void UIList::render(UIRenderer* ui) {
         y += itemHeight;
     }
 
-    // Draw insertion line after the last item if dragging and the target is at the end
+    // Draw insertion line at end if dragging and target is beyond visible
     if (m_dragging && m_dragCurrentIndex == (int)m_items.size()) {
-        float yLine = m_rect.y + m_items.size() * m_itemHeight;
-        // Only draw if the line is within the visible area
+        float yLine = m_rect.y - m_scrollOffset + m_items.size() * itemHeight;
         if (yLine >= m_rect.y && yLine <= m_rect.y + m_rect.h) {
             ui->draw_rect(m_rect.x + 4, yLine - 1, m_rect.w - 8, 2, 1.0f, 1.0f, 0.0f, 1.0f);
         }
@@ -132,7 +119,7 @@ void UIList::render(UIRenderer* ui) {
     ui->pop_clip_rect();
 }
 
-// ---- Input handling (unchanged) ----
+// ---- Input (unchanged except get_item_at_y now accounts for offset) ----
 bool UIList::on_mouse_down(float x, float y, int button) {
     if (button != 0) return false;
 
@@ -142,7 +129,7 @@ bool UIList::on_mouse_down(float x, float y, int button) {
             m_dragging = true;
             m_dragStartIndex = index;
             m_dragCurrentIndex = index;
-            m_dragOffsetY = y - (m_rect.y + index * m_itemHeight);
+            m_dragOffsetY = y - (m_rect.y + index * m_itemHeight - m_scrollOffset);
             UIRoot* root = get_root();
             if (root) {
                 root->set_capture(this, true);
@@ -193,7 +180,7 @@ bool UIList::on_mouse_move(float x, float y) {
                 index = (int)m_items.size();
             }
         } else {
-            float relY = y - (m_rect.y + index * m_itemHeight);
+            float relY = y - (m_rect.y + index * m_itemHeight - m_scrollOffset);
             if (relY > m_itemHeight * 0.5f) {
                 index = index + 1;
             }
