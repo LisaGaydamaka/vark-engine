@@ -356,3 +356,8 @@ void Editor::on_key_down(int key, bool ctrl, bool shift) {
 void Editor::set_keybinds(const EditorKeybindSettings& keybinds) {
     m_keybinds = keybinds;
 }
+
+void Editor::set_brush_name(int index, const std::string& name) {
+    if (index < 0 || index >= (int)m_brushes.size()) return;
+    m_brushes[index].name = name;
+}

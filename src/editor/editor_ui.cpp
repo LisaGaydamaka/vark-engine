@@ -5,8 +5,9 @@
 #include "core/logger.h"
 #include "imgui.h"
 #include <cstdio>
-#include <algorithm>      // <-- added for std::sort
-#include <vector>         // <-- added for std::vector (though already used)
+#include <algorithm>
+#include <vector>
+#include <cstring>
 
 static void BuildMenuBar(Editor& editor);
 static void BuildLeftPanel(Editor& editor);
@@ -56,7 +57,7 @@ static void BuildMenuBar(Editor& editor) {
 }
 
 // ------------------------------------------------------------------
-// Left Panel – Brush List with Time and Brush columns
+// Left Panel – Brush List with editable names on double-click
 // ------------------------------------------------------------------
 static void BuildLeftPanel(Editor& editor) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -95,9 +96,13 @@ static void BuildLeftPanel(Editor& editor) {
 
     ImGui::Separator();
 
-    // ---- Brush list with two columns: Time and Brush (name) ----
+    // ---- Brush list ----
     const auto& brushes = editor.get_brushes();
     int selected = editor.get_selected_index();
+
+    // Static state for inline editing
+    static int editingIndex = -1;
+    static char editingBuffer[128] = "";
 
     ImGui::BeginChild("BrushList", ImVec2(0, 0), true);
 
@@ -106,12 +111,11 @@ static void BuildLeftPanel(Editor& editor) {
             ImGuiTableFlags_NoBordersInBody |
             ImGuiTableFlags_SizingStretchProp))
     {
-        // Setup columns with headers
         ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 40.0f);
         ImGui::TableSetupColumn("Brush", ImGuiTableColumnFlags_WidthStretch);
-        ImGui::TableHeadersRow();   // <-- shows the headers
+        ImGui::TableHeadersRow();
 
-        // Sort brushes by time (ascending)
+        // Sort brushes by time
         std::vector<int> sortedIndices;
         sortedIndices.resize(brushes.size());
         for (int i = 0; i < (int)brushes.size(); ++i) sortedIndices[i] = i;
@@ -121,24 +125,58 @@ static void BuildLeftPanel(Editor& editor) {
         for (int idx : sortedIndices) {
             const auto& b = brushes[idx];
             bool isSelected = (idx == selected);
+            bool isEditing = (idx == editingIndex);
 
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
 
-            // Selectable that spans the whole row (both columns)
-            char rowLabel[32];
-            snprintf(rowLabel, sizeof(rowLabel), "##row_%d", idx);
-            if (ImGui::Selectable(rowLabel, isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
-                editor.select_brush(idx);
+            // ---- Row interaction ----
+            if (!isEditing) {
+                // Normal row: draw selectable
+                char rowLabel[32];
+                snprintf(rowLabel, sizeof(rowLabel), "##row_%d", idx);
+                if (ImGui::Selectable(rowLabel, isSelected, ImGuiSelectableFlags_SpanAllColumns)) {
+                    editor.select_brush(idx);
+                }
+                // Double-click to start editing
+                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                    editingIndex = idx;
+                    strncpy(editingBuffer, b.name.c_str(), sizeof(editingBuffer) - 1);
+                    editingBuffer[sizeof(editingBuffer) - 1] = '\0';
+                }
+            } else {
+                // Editing row: no selectable, just dummy
+                ImGui::Dummy(ImVec2(0, 0));
+                // Also need to handle clicks to commit? We'll handle focus loss later.
             }
 
-            // Draw the time in the first column (on top of the selectable)
+            // Time column
             ImGui::SameLine();
             ImGui::Text("%d", b.time);
 
-            // Move to second column and draw the brush name
+            // Brush column
             ImGui::TableSetColumnIndex(1);
-            ImGui::Text("%s", b.name.c_str());
+            if (isEditing) {
+                ImGui::PushID(idx);
+                // Input text
+                bool commit = false;
+                if (ImGui::InputText("##edit", editingBuffer, sizeof(editingBuffer),
+                    ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
+                {
+                    commit = true;
+                }
+                // Commit on focus loss (click outside)
+                if (!ImGui::IsItemActive() && !ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
+                    commit = true;
+                }
+                if (commit) {
+                    editor.set_brush_name(idx, editingBuffer);
+                    editingIndex = -1;
+                }
+                ImGui::PopID();
+            } else {
+                ImGui::Text("%s", b.name.c_str());
+            }
         }
         ImGui::EndTable();
     }

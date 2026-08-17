@@ -1,3 +1,4 @@
+// src/editor/editor.h
 #pragma once
 #include "core/math.h"
 #include "world/level.h"
@@ -12,7 +13,6 @@ public:
     Editor();
     ~Editor();
 
-    // Removed UIRenderer* parameter
     bool initialize(Renderer* renderer, Level* level);
     void shutdown();
     void update(float dt);
@@ -25,6 +25,9 @@ public:
     void add_brush(BrushType type, ShapeType shape);
     void select_brush(int index);
     int pick_brush(int mouseX, int mouseY);
+
+    // ---- NEW: set brush name ----
+    void set_brush_name(int index, const std::string& name);
 
     // Camera access
     Camera* get_camera() { return m_editorCamera.get_camera(); }
@@ -47,8 +50,6 @@ public:
 
 private:
     void rebuild_wireframe_buffer();
-
-    // Raycasting helpers
     Vec3 screen_to_world_ray(int mouseX, int mouseY);
     bool intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir, const Vec3& boxMin, const Vec3& boxMax, float& outT) const;
 
