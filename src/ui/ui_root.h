@@ -17,6 +17,11 @@ public:
     bool on_key_down(int key, bool ctrl, bool shift) override;
     bool on_char(char c) override;
 
+    void set_capture(UIWidget* widget, bool capture);
+    UIWidget* get_captured_widget() const { return m_capturedWidget; }
+
 private:
     UIWidget* find_widget_at(float x, float y);
+    UIWidget* m_capturedWidget = nullptr;
+    UIWidget* m_hoveredWidget = nullptr; // for logging
 };

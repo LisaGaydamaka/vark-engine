@@ -1,4 +1,5 @@
 #include "ui_widget.h"
+#include "ui_root.h"
 
 void UIWidget::add_child(std::unique_ptr<UIWidget> child) {
     if (child) {
@@ -19,4 +20,14 @@ void UIWidget::layout_all() {
     for (auto& child : m_children) {
         child->layout_all();
     }
+}
+
+UIRoot* UIWidget::get_root() {
+    UIWidget* current = this;
+    while (current) {
+        UIRoot* root = dynamic_cast<UIRoot*>(current);
+        if (root) return root;
+        current = current->m_parent;
+    }
+    return nullptr;
 }

@@ -4,6 +4,7 @@
 #include <functional>
 
 class UIRenderer;
+class UIRoot; // forward declare
 
 struct UIRect {
     float x, y, w, h;
@@ -23,6 +24,9 @@ public:
     UIWidget* get_parent() const { return m_parent; }
     void add_child(std::unique_ptr<UIWidget> child);
     const std::vector<std::unique_ptr<UIWidget>>& get_children() const { return m_children; }
+
+    // Get the root UIRoot (if any)
+    UIRoot* get_root();
 
     virtual void render(UIRenderer* ui) {}
     virtual void layout() {}

@@ -4,6 +4,7 @@
 #include <windowsx.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cmath>
 #include "renderer/renderer.h"
 #include "world/level.h"
 #include "ui/ui_renderer.h"
@@ -16,6 +17,7 @@
 #include "ui/ui_label.h"
 #include "ui/ui_panel.h"
 #include "ui/ui_button.h"
+#include "ui/ui_splitter.h"
 
 static HWND g_hwnd = nullptr;
 static Renderer g_renderer;
@@ -26,6 +28,7 @@ static std::unique_ptr<UIRoot> g_uiRoot;
 
 static int g_clickX = 0, g_clickY = 0;
 static bool g_clickValid = false;
+static int g_mouseX = 0, g_mouseY = 0;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -49,6 +52,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_MOUSEMOVE: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
+            g_mouseX = x;
+            g_mouseY = y;
             static int lastX = x, lastY = y;
             bool leftDown   = (wParam & MK_LBUTTON) != 0;
             bool middleDown = (wParam & MK_MBUTTON) != 0;
@@ -126,6 +131,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     (void)hPrevInstance;
 
+    // ---- Make the application DPI-aware to avoid coordinate scaling ----
+    SetProcessDPIAware();
+
     AllocConsole();
     FILE* fDummy;
     freopen_s(&fDummy, "CONOUT$", "w", stdout);
@@ -160,6 +168,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return -1;
     }
 
+    // Show the window
+    ShowWindow(g_hwnd, nCmdShow);
+    UpdateWindow(g_hwnd);
+
+    // ---- Initialize renderer and UI ----
     if (!g_renderer.initialize(g_hwnd, width, height)) {
         LOG_ERROR("Renderer init failed");
         return -1;
@@ -170,12 +183,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return -1;
     }
 
+    // ---- IMPORTANT: resize to the actual client area ----
+    // The window's initial size (width,height) includes title bar and borders,
+    // while the client area is smaller. This mismatch causes mouse coordinate offset.
+    // Resizing after creation brings the renderer and UI into sync with the client.
+    RECT clientRect;
+    GetClientRect(g_hwnd, &clientRect);
+    int clientWidth = clientRect.right - clientRect.left;
+    int clientHeight = clientRect.bottom - clientRect.top;
+    if (clientWidth > 0 && clientHeight > 0) {
+        g_renderer.resize(clientWidth, clientHeight);
+        g_ui.resize(clientWidth, clientHeight);
+        LOG_INFO("Adjusted to actual client size: %dx%d", clientWidth, clientHeight);
+    }
+
+    // ---- Initialize editor ----
     if (!g_editor.initialize(&g_renderer, &g_level, &g_ui)) {
         LOG_ERROR("Editor init failed");
         return -1;
     }
     g_editor.set_keybinds(settings.keybinds);
 
+    // ---- Load level ----
     const char* levelPath = "assets/levels/test.vmis";
     if (lpCmdLine && lpCmdLine[0]) {
         levelPath = lpCmdLine;
@@ -186,34 +215,29 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     g_editor.sync_brushes();
 
-    // ---- Step 4: Panel + Button test (with fixed positions) ----
+    // ---- Build UI (splitter test) ----
     g_uiRoot = std::make_unique<UIRoot>();
 
-    auto panel = std::make_unique<UIPanel>();
-    panel->set_rect(10.0f, 60.0f, 200.0f, 100.0f);
-    panel->set_background(0.2f, 0.2f, 0.3f, 1.0f);
-    panel->set_border(0.6f, 0.6f, 0.8f, 1.0f, 2.0f);
+    auto splitter = std::make_unique<UISplitter>(UISplitter::Vertical, 0.4f);
+    splitter->set_rect(150.0f, 150.0f, 400.0f, 300.0f);
 
-    // Position button and label inside the panel
-    auto button = std::make_unique<UIButton>("Click Me");
-    button->set_rect(panel->get_rect().x + 20.0f, panel->get_rect().y + 20.0f, 80.0f, 30.0f);
+    auto leftPanel = std::make_unique<UIPanel>();
+    leftPanel->set_background(0.2f, 0.1f, 0.1f, 1.0f);
+    leftPanel->set_border(0.5f, 0.2f, 0.2f, 1.0f, 1.0f);
+    auto leftLabel = std::make_unique<UILabel>("Left Panel", 1.0f, 1.0f, 1.0f, 1.0f);
+    leftLabel->set_rect(10.0f, 10.0f, 100.0f, 20.0f);
+    leftPanel->add_child(std::move(leftLabel));
 
-    auto clickLabel = std::make_unique<UILabel>("Clicks: 0", 1.0f, 1.0f, 0.0f, 1.0f);
-    clickLabel->set_rect(panel->get_rect().x + 20.0f, panel->get_rect().y + 60.0f, 100.0f, 20.0f);
+    auto rightPanel = std::make_unique<UIPanel>();
+    rightPanel->set_background(0.1f, 0.1f, 0.2f, 1.0f);
+    rightPanel->set_border(0.2f, 0.2f, 0.5f, 1.0f, 1.0f);
+    auto rightLabel = std::make_unique<UILabel>("Right Panel", 1.0f, 1.0f, 1.0f, 1.0f);
+    rightLabel->set_rect(10.0f, 10.0f, 100.0f, 20.0f);
+    rightPanel->add_child(std::move(rightLabel));
 
-    UILabel* labelPtr = clickLabel.get();
-    int clickCount = 0;
-
-    button->set_on_click([labelPtr, &clickCount]() {
-        clickCount++;
-        char buf[32];
-        snprintf(buf, sizeof(buf), "Clicks: %d", clickCount);
-        labelPtr->set_text(buf);
-    });
-
-    panel->add_child(std::move(button));
-    panel->add_child(std::move(clickLabel));
-    g_uiRoot->add_child(std::move(panel));
+    splitter->add_child(std::move(leftPanel));
+    splitter->add_child(std::move(rightPanel));
+    g_uiRoot->add_child(std::move(splitter));
 
     MSG msg = {};
 
@@ -240,21 +264,38 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             g_renderer.set_transform(mvp);
         }
 
-        // ---- Disable 3D and old UI ----
+        // ---- Temporarily disable 3D rendering ----
         // g_level.render(&g_renderer);
         // g_editor.render();
 
-        // ---- Clipping test ----
+        // ---- Clipping test (demonstrates scissors) ----
         g_ui.draw_rect(0.0f, 0.0f, (float)curWidth, (float)curHeight, 1.0f, 0.0f, 0.0f, 0.5f);
         g_ui.push_clip_rect(50.0f, 50.0f, 100.0f, 100.0f);
         g_ui.draw_rect(0.0f, 0.0f, (float)curWidth, (float)curHeight, 0.0f, 1.0f, 0.0f, 0.7f);
         g_ui.pop_clip_rect();
         g_ui.draw_text(10.0f, 10.0f, "CLIP TEST: Red background, green clipped to (50,50)-(150,150)", 1.0f, 1.0f, 1.0f, 1.0f);
 
-        // ---- Render UI root ----
+        // ---- Grid (every 50px) ----
+        float gridColor[4] = {0.2f, 0.2f, 0.2f, 0.4f};
+        for (int x = 0; x <= curWidth; x += 50) {
+            g_ui.draw_rect((float)x, 0.0f, 1.0f, (float)curHeight, gridColor[0], gridColor[1], gridColor[2], gridColor[3]);
+        }
+        for (int y = 0; y <= curHeight; y += 50) {
+            g_ui.draw_rect(0.0f, (float)y, (float)curWidth, 1.0f, gridColor[0], gridColor[1], gridColor[2], gridColor[3]);
+        }
+
+        // ---- Render UI ----
         if (g_uiRoot) {
             g_uiRoot->render_all(&g_ui);
         }
+
+        // ---- Crosshair (green +) at mouse ----
+        int cx = g_mouseX;
+        int cy = g_mouseY;
+        int len = 12;
+        g_ui.draw_rect((float)(cx - len), (float)cy, (float)(len * 2), 1.0f, 0.0f, 1.0f, 0.0f, 1.0f);
+        g_ui.draw_rect((float)cx, (float)(cy - len), 1.0f, (float)(len * 2), 0.0f, 1.0f, 0.0f, 1.0f);
+        g_ui.draw_rect((float)(cx - 2), (float)(cy - 2), 5.0f, 5.0f, 0.0f, 1.0f, 0.0f, 1.0f);
 
         g_renderer.end_frame();
     }

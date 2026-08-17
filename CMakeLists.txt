@@ -93,7 +93,7 @@ add_library(vark_ui STATIC
     src/ui/ui_widget.cpp
     src/ui/ui_root.cpp
     src/ui/ui_layout.cpp
-    # src/ui/ui_splitter.cpp   # <-- ADD
+    src/ui/ui_splitter.cpp   # <-- ADD
 )
 target_compile_definitions(vark_ui PRIVATE NOMINMAX)
 target_include_directories(vark_ui PUBLIC
