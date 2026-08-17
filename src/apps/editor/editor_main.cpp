@@ -208,12 +208,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     g_editor.sync_brushes();
 
-        // ---- Build UI ----
+    // ---- Build UI ----
     LOG_INFO("Creating UI root and widgets...");
     g_uiRoot = std::make_unique<UIRoot>();
 
+    // ---- FIXED SMALL SPLITTER for testing performance ----
     auto splitter = std::make_unique<UISplitter>(UISplitter::Vertical, 0.3f);
-    splitter->set_rect(150.0f, 150.0f, 500.0f, 400.0f);
+    splitter->set_rect(150.0f, 150.0f, 500.0f, 400.0f);   // small, not fullscreen
     splitter->set_hit_thickness(20.0f);
 
     auto leftContainer = std::make_unique<UIContainer>();
@@ -224,13 +225,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     leftBg->set_border(0.3f, 0.3f, 0.4f, 1.0f, 1.0f);
 
     auto list = std::make_unique<UIList>();
-    std::vector<std::pair<std::string, int>> brushItems = {
-        {"Brush 0 (Add Box)", 0},
-        {"Brush 1 (Sub Wedge)", 1},
-        {"Brush 2 (Add Box)", 2},
-        {"Brush 3 (Sub Box)", 3}
-    };
+
+    // ---- 200 items for performance test ----
+    std::vector<std::pair<std::string, int>> brushItems;
+    for (int i = 0; i < 200; ++i) {
+        std::string label = "Brush " + std::to_string(i) + " (Item)";
+        brushItems.push_back({label, i});
+    }
     list->set_items(brushItems);
+
     list->set_on_selection_changed([](int idx) {
         LOG_INFO("UIList: selection changed to index %d", idx);
     });
@@ -270,7 +273,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     });
     vboxContainer->add_child(std::move(textField));
 
-    // ---- Test button for Step 1 ----
+    // ---- TEST BUTTON (Step 1) ----
     auto testButton = std::make_unique<UIButton>("Test Click");
     testButton->set_rect(0, 0, 120, 30);
     testButton->set_on_click([]() {
