@@ -1,6 +1,6 @@
 #include "ui_splitter.h"
 #include "ui_root.h"
-#include "ui_renderer.h"   // <-- ADD THIS
+#include "ui_renderer.h"
 #include <algorithm>
 
 UISplitter::UISplitter(Orientation orient, float initialRatio)
@@ -69,16 +69,19 @@ bool UISplitter::is_on_handle(float x, float y) const {
     UIWidget* first = m_children[0].get();
     float handleX, handleY, handleW, handleH;
     if (m_orientation == Vertical) {
-        handleX = first->get_rect().x + first->get_rect().w;
+        float halfHit = m_hitThickness * 0.5f;
+        handleX = first->get_rect().x + first->get_rect().w - halfHit;
         handleY = m_rect.y;
-        handleW = m_handleThickness;
+        handleW = m_hitThickness;
         handleH = m_rect.h;
     } else {
+        float halfHit = m_hitThickness * 0.5f;
         handleX = m_rect.x;
-        handleY = first->get_rect().y + first->get_rect().h;
+        handleY = first->get_rect().y + first->get_rect().h - halfHit;
         handleW = m_rect.w;
-        handleH = m_handleThickness;
+        handleH = m_hitThickness;
     }
+
     return x >= handleX && x <= handleX + handleW &&
            y >= handleY && y <= handleY + handleH;
 }

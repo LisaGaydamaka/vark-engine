@@ -16,8 +16,21 @@ public:
     void set_handle_thickness(float thickness) { m_handleThickness = thickness; }
     float get_handle_thickness() const { return m_handleThickness; }
 
+    void set_hit_thickness(float thickness) { m_hitThickness = thickness; }
+    float get_hit_thickness() const { return m_hitThickness; }
+
     void layout() override;
     void render(UIRenderer* ui) override;
+
+    // ---- Override hit_test to return true for the enlarged handle area ----
+    bool hit_test(float x, float y) const override {
+        return is_on_handle(x, y);
+    }
+
+    // ---- NEW: priority hit – take over children in the handle area ----
+    bool is_priority_hit(float x, float y) const override {
+        return is_on_handle(x, y);
+    }
 
     bool on_mouse_down(float x, float y, int button) override;
     bool on_mouse_up(float x, float y, int button) override;
@@ -29,6 +42,7 @@ private:
 
     Orientation m_orientation = Vertical;
     float m_ratio = 0.5f;
-    float m_handleThickness = 4.0f;
+    float m_handleThickness = 4.0f;   // visual thickness
+    float m_hitThickness = 20.0f;     // mouse detection thickness (wider)
     bool m_dragging = false;
 };

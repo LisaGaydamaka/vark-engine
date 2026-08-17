@@ -4,6 +4,11 @@
 #include <typeinfo>
 
 static UIWidget* find_deepest_widget(UIWidget* parent, float x, float y) {
+    // ---- NEW: if the parent claims priority hit, return it immediately ----
+    if (parent->is_priority_hit(x, y)) {
+        return parent;
+    }
+
     const auto& children = parent->get_children();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
         UIWidget* child = it->get();

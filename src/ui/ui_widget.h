@@ -4,7 +4,7 @@
 #include <functional>
 
 class UIRenderer;
-class UIRoot; // forward declare
+class UIRoot;
 
 struct UIRect {
     float x, y, w, h;
@@ -25,7 +25,6 @@ public:
     void add_child(std::unique_ptr<UIWidget> child);
     const std::vector<std::unique_ptr<UIWidget>>& get_children() const { return m_children; }
 
-    // Get the root UIRoot (if any)
     UIRoot* get_root();
 
     virtual void render(UIRenderer* ui) {}
@@ -37,6 +36,10 @@ public:
     virtual bool on_char(char c) { return false; }
 
     virtual bool hit_test(float x, float y) const { return m_rect.contains(x, y); }
+
+    // ---- NEW: priority hit testing ----
+    // Override this to return true for areas that should take precedence over children.
+    virtual bool is_priority_hit(float x, float y) const { return false; }
 
     virtual void render_all(UIRenderer* ui);
     virtual void layout_all();

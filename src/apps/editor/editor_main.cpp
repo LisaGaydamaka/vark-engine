@@ -220,6 +220,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     auto splitter = std::make_unique<UISplitter>(UISplitter::Vertical, 0.4f);
     splitter->set_rect(150.0f, 150.0f, 400.0f, 300.0f);
+    splitter->set_hit_thickness(20.0f);   // wider grab area – easier to drag
 
     auto leftPanel = std::make_unique<UIPanel>();
     leftPanel->set_background(0.2f, 0.1f, 0.1f, 1.0f);
