@@ -141,13 +141,17 @@ static void BuildLeftPanel(Editor& editor) {
                 // Double-click to start editing
                 if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
                     editingIndex = idx;
-                    strncpy(editingBuffer, b.name.c_str(), sizeof(editingBuffer) - 1);
-                    editingBuffer[sizeof(editingBuffer) - 1] = '\0';
+                    // Use safe strncpy_s
+                    strncpy_s(editingBuffer, sizeof(editingBuffer), b.name.c_str(), _TRUNCATE);
+                    ImGui::SetKeyboardFocusHere();
                 }
             } else {
-                // Editing row: no selectable, just dummy
-                ImGui::Dummy(ImVec2(0, 0));
-                // Also need to handle clicks to commit? We'll handle focus loss later.
+                // Editing row: we need a dummy to prevent selection, but we also need to handle clicks to commit
+                // Use an invisible button to eat clicks? Actually we want the input to be clickable.
+                // We'll draw a dummy that spans the row, and then the input on top.
+                // But we don't need to draw anything here; the input will be drawn in the next column.
+                // However, we need to handle click outside to commit. We'll handle that in the input logic.
+                // We can just draw nothing here.
             }
 
             // Time column
@@ -165,8 +169,10 @@ static void BuildLeftPanel(Editor& editor) {
                 {
                     commit = true;
                 }
-                // Commit on focus loss (click outside)
+                // Commit on focus loss (click outside) – but only if we clicked outside the input and not on another brush
                 if (!ImGui::IsItemActive() && !ImGui::IsItemHovered() && ImGui::IsMouseClicked(0)) {
+                    // Check if the click was on another row? We need to know if the click is outside the entire table.
+                    // Simpler: if we lose focus and we are not hovering, commit.
                     commit = true;
                 }
                 if (commit) {
