@@ -18,6 +18,7 @@
 #include "ui/ui_panel.h"
 #include "ui/ui_button.h"
 #include "ui/ui_splitter.h"
+#include "ui/ui_list.h"
 
 static HWND g_hwnd = nullptr;
 static Renderer g_renderer;
@@ -29,6 +30,11 @@ static std::unique_ptr<UIRoot> g_uiRoot;
 static int g_clickX = 0, g_clickY = 0;
 static bool g_clickValid = false;
 static int g_mouseX = 0, g_mouseY = 0;
+
+// ---- Logging helper for mouse events ----
+static void log_mouse_event(const char* eventName, int x, int y) {
+    LOG_INFO("WINDOW: %s at (%d, %d)", eventName, x, y);
+}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -54,6 +60,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int y = GET_Y_LPARAM(lParam);
             g_mouseX = x;
             g_mouseY = y;
+
+            // Log every 10th move to avoid spam (optional)
+            static int moveCounter = 0;
+            if (++moveCounter % 10 == 0) {
+                log_mouse_event("MOUSEMOVE", x, y);
+            }
+
             static int lastX = x, lastY = y;
             bool leftDown   = (wParam & MK_LBUTTON) != 0;
             bool middleDown = (wParam & MK_MBUTTON) != 0;
@@ -76,18 +89,24 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_LBUTTONDOWN: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
+            log_mouse_event("LBUTTONDOWN", x, y);
             g_clickX = x;
             g_clickY = y;
             g_clickValid = true;
             g_editor.on_mouse_button(0, true);
+
             if (g_uiRoot) {
+                LOG_INFO("WINDOW: Forwarding LBUTTONDOWN to UIRoot");
                 g_uiRoot->on_mouse_down((float)x, (float)y, 0);
+            } else {
+                LOG_WARN("WINDOW: g_uiRoot is null!");
             }
             return 0;
         }
         case WM_LBUTTONUP: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
+            log_mouse_event("LBUTTONUP", x, y);
             if (g_clickValid && abs(x - g_clickX) < 5 && abs(y - g_clickY) < 5) {
                 bool consumed = g_editor.get_ui()->on_mouse_click(x, y);
                 if (!consumed) {
@@ -100,6 +119,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_clickValid = false;
             g_editor.on_mouse_button(0, false);
             if (g_uiRoot) {
+                LOG_INFO("WINDOW: Forwarding LBUTTONUP to UIRoot");
                 g_uiRoot->on_mouse_up((float)x, (float)y, 0);
             }
             return 0;
@@ -131,7 +151,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
     (void)hPrevInstance;
 
-    // ---- Make the application DPI-aware to avoid coordinate scaling ----
     SetProcessDPIAware();
 
     AllocConsole();
@@ -168,11 +187,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return -1;
     }
 
-    // Show the window
     ShowWindow(g_hwnd, nCmdShow);
     UpdateWindow(g_hwnd);
 
-    // ---- Initialize renderer and UI ----
     if (!g_renderer.initialize(g_hwnd, width, height)) {
         LOG_ERROR("Renderer init failed");
         return -1;
@@ -183,10 +200,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         return -1;
     }
 
-    // ---- IMPORTANT: resize to the actual client area ----
-    // The window's initial size (width,height) includes title bar and borders,
-    // while the client area is smaller. This mismatch causes mouse coordinate offset.
-    // Resizing after creation brings the renderer and UI into sync with the client.
     RECT clientRect;
     GetClientRect(g_hwnd, &clientRect);
     int clientWidth = clientRect.right - clientRect.left;
@@ -197,14 +210,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         LOG_INFO("Adjusted to actual client size: %dx%d", clientWidth, clientHeight);
     }
 
-    // ---- Initialize editor ----
     if (!g_editor.initialize(&g_renderer, &g_level, &g_ui)) {
         LOG_ERROR("Editor init failed");
         return -1;
     }
     g_editor.set_keybinds(settings.keybinds);
 
-    // ---- Load level ----
     const char* levelPath = "assets/levels/test.vmis";
     if (lpCmdLine && lpCmdLine[0]) {
         levelPath = lpCmdLine;
@@ -215,30 +226,51 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     g_editor.sync_brushes();
 
-    // ---- Build UI (splitter test) ----
+    // ---- Build UI ----
+    LOG_INFO("Creating UI root and widgets...");
     g_uiRoot = std::make_unique<UIRoot>();
 
-    auto splitter = std::make_unique<UISplitter>(UISplitter::Vertical, 0.4f);
-    splitter->set_rect(150.0f, 150.0f, 400.0f, 300.0f);
-    splitter->set_hit_thickness(20.0f);   // wider grab area – easier to drag
+    auto splitter = std::make_unique<UISplitter>(UISplitter::Vertical, 0.3f);
+    splitter->set_rect(150.0f, 150.0f, 500.0f, 400.0f);
+    splitter->set_hit_thickness(20.0f);
 
-    auto leftPanel = std::make_unique<UIPanel>();
-    leftPanel->set_background(0.2f, 0.1f, 0.1f, 1.0f);
-    leftPanel->set_border(0.5f, 0.2f, 0.2f, 1.0f, 1.0f);
-    auto leftLabel = std::make_unique<UILabel>("Left Panel", 1.0f, 1.0f, 1.0f, 1.0f);
-    leftLabel->set_rect(10.0f, 10.0f, 100.0f, 20.0f);
-    leftPanel->add_child(std::move(leftLabel));
+    // ---- Left container with fill layout ----
+    auto leftContainer = std::make_unique<UIContainer>();
+    leftContainer->set_layout(std::make_unique<UIFillLayout>());
 
+    auto leftBg = std::make_unique<UIPanel>();
+    leftBg->set_background(0.15f, 0.15f, 0.2f, 1.0f);
+    leftBg->set_border(0.3f, 0.3f, 0.4f, 1.0f, 1.0f);
+
+    auto list = std::make_unique<UIList>();
+    // Use dummy data (later we'll sync with actual brushes)
+    std::vector<std::pair<std::string, int>> brushItems = {
+        {"Brush 0 (Add Box)", 0},
+        {"Brush 1 (Sub Wedge)", 1},
+        {"Brush 2 (Add Box)", 2},
+        {"Brush 3 (Sub Box)", 3}
+    };
+    list->set_items(brushItems);
+    list->set_on_selection_changed([](int idx) {
+        LOG_INFO("UIList: selection changed to index %d", idx);
+    });
+
+    leftContainer->add_child(std::move(leftBg));
+    leftContainer->add_child(std::move(list));
+
+    // ---- Right panel placeholder ----
     auto rightPanel = std::make_unique<UIPanel>();
-    rightPanel->set_background(0.1f, 0.1f, 0.2f, 1.0f);
-    rightPanel->set_border(0.2f, 0.2f, 0.5f, 1.0f, 1.0f);
-    auto rightLabel = std::make_unique<UILabel>("Right Panel", 1.0f, 1.0f, 1.0f, 1.0f);
-    rightLabel->set_rect(10.0f, 10.0f, 100.0f, 20.0f);
+    rightPanel->set_background(0.1f, 0.1f, 0.15f, 1.0f);
+    rightPanel->set_border(0.3f, 0.3f, 0.4f, 1.0f, 1.0f);
+    auto rightLabel = std::make_unique<UILabel>("Inspector (coming soon)", 0.8f, 0.8f, 0.8f, 1.0f);
+    rightLabel->set_rect(10.0f, 10.0f, 200.0f, 20.0f);
     rightPanel->add_child(std::move(rightLabel));
 
-    splitter->add_child(std::move(leftPanel));
+    splitter->add_child(std::move(leftContainer));
     splitter->add_child(std::move(rightPanel));
     g_uiRoot->add_child(std::move(splitter));
+
+    LOG_INFO("UI built, entering main loop.");
 
     MSG msg = {};
 
@@ -265,18 +297,18 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             g_renderer.set_transform(mvp);
         }
 
-        // ---- Temporarily disable 3D rendering ----
+        // ---- Disable 3D for now ----
         // g_level.render(&g_renderer);
         // g_editor.render();
 
-        // ---- Clipping test (demonstrates scissors) ----
+        // ---- Clipping test ----
         g_ui.draw_rect(0.0f, 0.0f, (float)curWidth, (float)curHeight, 1.0f, 0.0f, 0.0f, 0.5f);
         g_ui.push_clip_rect(50.0f, 50.0f, 100.0f, 100.0f);
         g_ui.draw_rect(0.0f, 0.0f, (float)curWidth, (float)curHeight, 0.0f, 1.0f, 0.0f, 0.7f);
         g_ui.pop_clip_rect();
         g_ui.draw_text(10.0f, 10.0f, "CLIP TEST: Red background, green clipped to (50,50)-(150,150)", 1.0f, 1.0f, 1.0f, 1.0f);
 
-        // ---- Grid (every 50px) ----
+        // ---- Grid ----
         float gridColor[4] = {0.2f, 0.2f, 0.2f, 0.4f};
         for (int x = 0; x <= curWidth; x += 50) {
             g_ui.draw_rect((float)x, 0.0f, 1.0f, (float)curHeight, gridColor[0], gridColor[1], gridColor[2], gridColor[3]);
@@ -290,7 +322,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             g_uiRoot->render_all(&g_ui);
         }
 
-        // ---- Crosshair (green +) at mouse ----
+        // ---- Crosshair ----
         int cx = g_mouseX;
         int cy = g_mouseY;
         int len = 12;

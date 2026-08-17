@@ -4,8 +4,9 @@
 #include <typeinfo>
 
 static UIWidget* find_deepest_widget(UIWidget* parent, float x, float y) {
-    // ---- NEW: if the parent claims priority hit, return it immediately ----
+    // Check priority hit first (e.g., splitter handle)
     if (parent->is_priority_hit(x, y)) {
+        LOG_INFO("UI: priority hit on %s", typeid(*parent).name());
         return parent;
     }
 
@@ -13,17 +14,23 @@ static UIWidget* find_deepest_widget(UIWidget* parent, float x, float y) {
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
         UIWidget* child = it->get();
         if (child->hit_test(x, y)) {
+            LOG_INFO("UI: child %s hit at (%f,%f)", typeid(*child).name(), x, y);
             UIWidget* deeper = find_deepest_widget(child, x, y);
             if (deeper) {
+                LOG_INFO("UI: returning deeper %s", typeid(*deeper).name());
                 return deeper;
             }
+            LOG_INFO("UI: returning child %s", typeid(*child).name());
             return child;
+        } else {
+            LOG_INFO("UI: child %s miss at (%f,%f)", typeid(*child).name(), x, y);
         }
     }
     return nullptr;
 }
 
 UIWidget* UIRoot::find_widget_at(float x, float y) {
+    LOG_INFO("UI: find_widget_at(%f, %f)", x, y);
     return find_deepest_widget(this, x, y);
 }
 
@@ -36,18 +43,25 @@ void UIRoot::render_all(UIRenderer* ui) {
 }
 
 bool UIRoot::on_mouse_down(float x, float y, int button) {
+    LOG_INFO("UI: on_mouse_down(%f, %f, %d)", x, y, button);
     if (m_capturedWidget) {
+        LOG_INFO("UI: captured widget %s gets event", typeid(*m_capturedWidget).name());
         m_capturedWidget->on_mouse_down(x, y, button);
         return true;
     }
     UIWidget* target = find_widget_at(x, y);
     if (target) {
-        return target->on_mouse_down(x, y, button);
+        LOG_INFO("UI: Target found: %s", typeid(*target).name());
+        bool consumed = target->on_mouse_down(x, y, button);
+        LOG_INFO("UI: Event consumed = %d", consumed);
+        return consumed;
     }
+    LOG_WARN("UI: No target found for click at (%f, %f)", x, y);
     return false;
 }
 
 bool UIRoot::on_mouse_up(float x, float y, int button) {
+    LOG_INFO("UI: on_mouse_up(%f, %f, %d)", x, y, button);
     if (m_capturedWidget) {
         bool consumed = m_capturedWidget->on_mouse_up(x, y, button);
         set_capture(m_capturedWidget, false);
@@ -55,14 +69,18 @@ bool UIRoot::on_mouse_up(float x, float y, int button) {
     }
     UIWidget* target = find_widget_at(x, y);
     if (target) {
-        return target->on_mouse_up(x, y, button);
+        LOG_INFO("UI: Target found: %s", typeid(*target).name());
+        bool consumed = target->on_mouse_up(x, y, button);
+        LOG_INFO("UI: Event consumed = %d", consumed);
+        return consumed;
     }
     return false;
 }
 
 bool UIRoot::on_mouse_move(float x, float y) {
     if (m_capturedWidget) {
-        return m_capturedWidget->on_mouse_move(x, y);
+        m_capturedWidget->on_mouse_move(x, y);
+        return true;
     }
     UIWidget* target = find_widget_at(x, y);
     if (target != m_hoveredWidget) {
@@ -76,12 +94,13 @@ bool UIRoot::on_mouse_move(float x, float y) {
         }
     }
     if (target) {
-        return target->on_mouse_move(x, y);
+        target->on_mouse_move(x, y);
     }
     return false;
 }
 
 bool UIRoot::on_key_down(int key, bool ctrl, bool shift) {
+    // Could forward to focused widget later
     return false;
 }
 
@@ -92,9 +111,11 @@ bool UIRoot::on_char(char c) {
 void UIRoot::set_capture(UIWidget* widget, bool capture) {
     if (capture) {
         m_capturedWidget = widget;
+        LOG_INFO("UI: capture set to %s", typeid(*widget).name());
     } else {
         if (m_capturedWidget == widget) {
             m_capturedWidget = nullptr;
+            LOG_INFO("UI: capture released");
         }
     }
 }

@@ -23,5 +23,5 @@ public:
 private:
     UIWidget* find_widget_at(float x, float y);
     UIWidget* m_capturedWidget = nullptr;
-    UIWidget* m_hoveredWidget = nullptr; // for logging
+    UIWidget* m_hoveredWidget = nullptr;
 };

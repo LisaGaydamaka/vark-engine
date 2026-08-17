@@ -22,12 +22,7 @@ public:
     void layout() override;
     void render(UIRenderer* ui) override;
 
-    // ---- Override hit_test to return true for the enlarged handle area ----
-    bool hit_test(float x, float y) const override {
-        return is_on_handle(x, y);
-    }
-
-    // ---- NEW: priority hit – take over children in the handle area ----
+    // ---- Use priority hit for handle area, not restrictive hit_test ----
     bool is_priority_hit(float x, float y) const override {
         return is_on_handle(x, y);
     }
@@ -42,7 +37,7 @@ private:
 
     Orientation m_orientation = Vertical;
     float m_ratio = 0.5f;
-    float m_handleThickness = 4.0f;   // visual thickness
-    float m_hitThickness = 20.0f;     // mouse detection thickness (wider)
+    float m_handleThickness = 4.0f;
+    float m_hitThickness = 20.0f;
     bool m_dragging = false;
 };
