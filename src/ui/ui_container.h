@@ -21,6 +21,9 @@ public:
         }
     }
 
+    // ---- Enable clipping for children ----
+    bool clips_children() const override { return true; }
+
 private:
     std::unique_ptr<UILayout> m_layout;
 };

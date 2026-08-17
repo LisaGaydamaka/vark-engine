@@ -1,5 +1,6 @@
 #pragma once
 #include "ui_widget.h"
+#include "ui_style.h"
 #include <string>
 #include <functional>
 
@@ -14,6 +15,15 @@ public:
     void set_placeholder(const std::string& text) { m_placeholder = text; }
     void set_commit_callback(std::function<void(const std::string&)> callback) { m_onCommit = callback; }
     void set_cancel_callback(std::function<void()> callback) { m_onCancel = callback; }
+
+    // ---- Layout preferred size ----
+    float get_preferred_width() const override {
+        // text width + padding
+        return (float)m_text.length() * UIStyle::fontWidth + 8.0f;
+    }
+    float get_preferred_height() const override {
+        return UIStyle::defaultTextFieldHeight;
+    }
 
     void render(UIRenderer* ui) override;
     bool on_mouse_down(float x, float y, int button) override;

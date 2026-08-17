@@ -9,6 +9,9 @@ public:
 
     bool hit_test(float x, float y) const override { return true; }
 
+    // ---- Don't clip root's own content (it's fullscreen) ----
+    bool clips_self() const override { return false; }
+
     void render_all(UIRenderer* ui) override;
 
     bool on_mouse_down(float x, float y, int button) override;
@@ -24,7 +27,6 @@ public:
     void set_focused_widget(UIWidget* widget);
     UIWidget* get_focused_widget() const { return m_focusedWidget; }
 
-    // ---- NEW: notify widget destruction ----
     void notify_widget_destroyed(UIWidget* widget);
 
 private:

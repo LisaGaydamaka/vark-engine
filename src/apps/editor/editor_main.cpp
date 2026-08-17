@@ -51,14 +51,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int delta = GET_WHEEL_DELTA_WPARAM(wParam);
             g_editor.on_mouse_wheel(delta);
 
-            // Get mouse position in client coordinates
             int screenX = GET_X_LPARAM(lParam);
             int screenY = GET_Y_LPARAM(lParam);
             POINT pt = { screenX, screenY };
             ScreenToClient(g_hwnd, &pt);
 
             if (g_uiRoot) {
-                // Normalize delta: 1.0 = one scroll notch
                 g_uiRoot->on_mouse_wheel((float)delta / 120.0f, (float)pt.x, (float)pt.y);
             }
             return 0;
@@ -260,7 +258,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     scrollContainer->set_child(std::move(list));
 
     leftContainer->add_child(std::move(leftBg));
-    leftContainer->add_child(std::move(scrollContainer)); // instead of list directly
+    leftContainer->add_child(std::move(scrollContainer));
 
     auto rightContainer = std::make_unique<UIContainer>();
     rightContainer->set_layout(std::make_unique<UIFillLayout>());
@@ -269,13 +267,21 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     rightBg->set_background(0.1f, 0.1f, 0.15f, 1.0f);
     rightBg->set_border(0.3f, 0.3f, 0.4f, 1.0f, 1.0f);
 
+    // ---- Right panel: VBox with padding and stretch ----
     auto vboxContainer = std::make_unique<UIContainer>();
-    vboxContainer->set_layout(std::make_unique<UIVBoxLayout>(5.0f));
 
+    // Create VBox layout with padding
+    auto vboxLayout = std::make_unique<UIVBoxLayout>(5.0f);
+    vboxLayout->set_padding(8.0f, 8.0f, 8.0f, 8.0f);
+    vboxContainer->set_layout(std::move(vboxLayout));
+
+    // Label – fixed height
     auto label = std::make_unique<UILabel>("Value:", 0.8f, 0.8f, 0.8f, 1.0f);
     label->set_rect(0, 0, 80, 20);
+    // No stretch – stays at preferred height
     vboxContainer->add_child(std::move(label));
 
+    // Text field – will stretch
     auto textField = std::make_unique<UITextField>();
     textField->set_rect(0, 0, 120, 20);
     textField->set_placeholder("Enter value...");
@@ -285,16 +291,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     textField->set_cancel_callback([]() {
         LOG_INFO("UITextField cancelled");
     });
+    textField->set_stretch(1.0f);   // share extra space
     vboxContainer->add_child(std::move(textField));
 
-    // ---- TEST BUTTON (Step 1) ----
+    // Test button – also stretches
     auto testButton = std::make_unique<UIButton>("Test Click");
     testButton->set_rect(0, 0, 120, 30);
     testButton->set_on_click([]() {
         LOG_INFO(">>> Test button clicked! (callback fired)");
     });
+    testButton->set_stretch(1.0f);
     vboxContainer->add_child(std::move(testButton));
-    // ---- end test button ----
 
     rightContainer->add_child(std::move(rightBg));
     rightContainer->add_child(std::move(vboxContainer));

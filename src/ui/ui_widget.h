@@ -16,7 +16,7 @@ struct UIRect {
 class UIWidget {
 public:
     UIWidget() = default;
-    virtual ~UIWidget();   // <-- now declared, but not defined inline
+    virtual ~UIWidget();
 
     void set_rect(float x, float y, float w, float h) { m_rect = {x, y, w, h}; }
     const UIRect& get_rect() const { return m_rect; }
@@ -29,6 +29,21 @@ public:
 
     UIRoot* get_root();
 
+    // ---- Preferred sizes (for layout) ----
+    virtual float get_preferred_width() const { return m_rect.w; }
+    virtual float get_preferred_height() const { return m_rect.h; }
+
+    // ---- Stretch factor ----
+    void set_stretch(float stretch) { m_stretch = stretch; }
+    float get_stretch() const { return m_stretch; }
+
+    // ---- Clipping ----
+    // Whether to clip the widget's own content (drawn in render()) to its rect.
+    virtual bool clips_self() const { return true; }
+    // Whether to clip child widgets to this widget's rect.
+    virtual bool clips_children() const { return false; }
+
+    // ---- Virtual event handlers ----
     virtual void render(UIRenderer* ui) {}
     virtual void layout() {}
     virtual bool on_mouse_down(float x, float y, int button) { return false; }
@@ -40,7 +55,6 @@ public:
 
     virtual bool hit_test(float x, float y) const { return m_rect.contains(x, y); }
     virtual bool is_priority_hit(float x, float y) const { return false; }
-
     virtual bool is_interactive() const { return false; }
 
     virtual void render_all(UIRenderer* ui);
@@ -53,6 +67,7 @@ public:
 
     bool is_focused() const { return m_focused; }
 
+    // For scrolling (content height)
     virtual float get_content_height() const { return 0.0f; }
 
 protected:
@@ -60,4 +75,5 @@ protected:
     UIWidget* m_parent = nullptr;
     std::vector<std::unique_ptr<UIWidget>> m_children;
     bool m_focused = false;
+    float m_stretch = 0.0f;
 };

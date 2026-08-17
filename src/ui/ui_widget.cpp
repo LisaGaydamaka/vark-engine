@@ -1,8 +1,8 @@
 #include "ui_widget.h"
 #include "ui_root.h"
+#include "ui_renderer.h"
 #include "core/logger.h"
 
-// ---- NEW: destructor that notifies root ----
 UIWidget::~UIWidget() {
     if (auto root = get_root()) {
         root->notify_widget_destroyed(this);
@@ -17,9 +17,26 @@ void UIWidget::add_child(std::unique_ptr<UIWidget> child) {
 }
 
 void UIWidget::render_all(UIRenderer* ui) {
-    render(ui);
+    // ---- Self clipping ----
+    bool selfClip = clips_self();
+    if (selfClip) {
+        ui->push_clip_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h);
+    }
+    render(ui);  // draw own content
+    if (selfClip) {
+        ui->pop_clip_rect();
+    }
+
+    // ---- Child clipping (if this widget clips children) ----
+    bool childClip = clips_children();
+    if (childClip) {
+        ui->push_clip_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h);
+    }
     for (auto& child : m_children) {
         child->render_all(ui);
+    }
+    if (childClip) {
+        ui->pop_clip_rect();
     }
 }
 

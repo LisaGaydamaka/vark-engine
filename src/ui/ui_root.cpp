@@ -30,10 +30,7 @@ UIWidget* UIRoot::find_widget_at(float x, float y) {
 
 void UIRoot::render_all(UIRenderer* ui) {
     layout_all();
-    render(ui);
-    for (auto& child : m_children) {
-        child->render_all(ui);
-    }
+    UIWidget::render_all(ui);  // base handles clipping
 }
 
 bool UIRoot::on_mouse_down(float x, float y, int button) {
@@ -155,7 +152,6 @@ void UIRoot::set_focused_widget(UIWidget* widget) {
     }
 }
 
-// ---- NEW: notify widget destruction ----
 void UIRoot::notify_widget_destroyed(UIWidget* widget) {
     if (m_capturedWidget == widget) m_capturedWidget = nullptr;
     if (m_focusedWidget == widget) m_focusedWidget = nullptr;

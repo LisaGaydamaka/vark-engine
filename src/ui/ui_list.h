@@ -16,10 +16,12 @@ public:
     void set_selected(int index);
     int get_selected() const { return m_selected; }
 
-    // ---- IScrollable implementation ----
+    // ---- IScrollable ----
     void set_scroll_offset(float offset) override { m_scrollOffset = offset; }
     float get_content_height() const override { return m_items.size() * m_itemHeight; }
-    // get_content_width not needed for vertical list
+
+    // ---- Layout preferred size ----
+    float get_preferred_height() const override { return get_content_height(); }
 
     bool is_interactive() const override { return true; }
 
