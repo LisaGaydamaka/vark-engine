@@ -184,6 +184,29 @@ bool UIList::on_mouse_up(float x, float y, int button) {
 
 bool UIList::on_mouse_move(float x, float y) {
     if (m_dragging) {
+        // ---- Auto-scroll when near edges ----
+        const float edgeMargin = 20.0f;
+        if (y < m_rect.y + edgeMargin) {
+            float delta = (m_rect.y + edgeMargin - y) / edgeMargin * 5.0f;
+            float newOffset = m_scrollOffset - delta;
+            float maxOffset = std::max(0.0f, get_content_height() - m_rect.h);
+            newOffset = std::clamp(newOffset, 0.0f, maxOffset);
+            if (newOffset != m_scrollOffset) {
+                m_scrollOffset = newOffset;
+                if (m_scrollCallback) m_scrollCallback(m_scrollOffset);
+            }
+        } else if (y > m_rect.y + m_rect.h - edgeMargin) {
+            float delta = (y - (m_rect.y + m_rect.h - edgeMargin)) / edgeMargin * 5.0f;
+            float newOffset = m_scrollOffset + delta;
+            float maxOffset = std::max(0.0f, get_content_height() - m_rect.h);
+            newOffset = std::clamp(newOffset, 0.0f, maxOffset);
+            if (newOffset != m_scrollOffset) {
+                m_scrollOffset = newOffset;
+                if (m_scrollCallback) m_scrollCallback(m_scrollOffset);
+            }
+        }
+
+        // ---- Existing drag logic ----
         int index = get_item_at_y(y);
         if (index < 0) {
             if (y < m_rect.y) {

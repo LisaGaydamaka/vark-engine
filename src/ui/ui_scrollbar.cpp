@@ -37,14 +37,25 @@ float UIScrollBar::get_thumb_position() const {
     return t * (trackLen - thumbSize);
 }
 
+// ---- NEW: compute thumb size from content vs viewport ----
 void UIScrollBar::update_thumb_size() {
     float trackLen = get_track_length();
     float range = m_max - m_min;
-    if (range == 0.0f) {
-        m_thumbSize = trackLen;
+    // If we have a viewport size, use it, otherwise fallback to old heuristic
+    if (m_viewportSize > 0.0f && range > 0.0f) {
+        float contentSize = range + m_viewportSize; // range is max-offset, so content = viewport + range
+        float ratio = m_viewportSize / contentSize;
+        m_thumbSize = trackLen * ratio;
+        // Clamp to reasonable size
+        m_thumbSize = std::clamp(m_thumbSize, 10.0f, trackLen);
     } else {
-        float size = trackLen * (1.0f / (1.0f + range / 100.0f));
-        m_thumbSize = std::clamp(size, 20.0f, trackLen);
+        // Fallback: old heuristic
+        if (range == 0.0f) {
+            m_thumbSize = trackLen;
+        } else {
+            float size = trackLen * (1.0f / (1.0f + range / 100.0f));
+            m_thumbSize = std::clamp(size, 20.0f, trackLen);
+        }
     }
 }
 

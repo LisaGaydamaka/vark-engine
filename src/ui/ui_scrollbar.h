@@ -13,6 +13,9 @@ public:
     void set_value(float val);
     float get_value() const { return m_value; }
 
+    // ---- NEW: tell the scrollbar how much content is visible ----
+    void set_viewport_size(float size) { m_viewportSize = size; }
+
     void set_on_value_changed(std::function<void(float)> callback) { m_onValueChanged = callback; }
 
     bool is_interactive() const override { return true; }
@@ -28,6 +31,7 @@ private:
     float m_max = 1.0f;
     float m_value = 0.0f;
     float m_thumbSize = 20.0f;
+    float m_viewportSize = 0.0f;    // NEW
     bool m_dragging = false;
     float m_dragOffset = 0.0f;
     std::function<void(float)> m_onValueChanged;

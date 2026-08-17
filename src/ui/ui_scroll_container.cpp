@@ -47,6 +47,9 @@ void UIScrollContainer::layout() {
     m_contentHeight = m_scrollable->get_content_height();
     m_viewportHeight = m_rect.h;
 
+    // ---- Tell the scrollbar how much is visible ----
+    m_scrollbar->set_viewport_size(m_viewportHeight);
+
     float childWidth = m_rect.w - m_scrollbarWidth;
     if (childWidth < 0) childWidth = 0;
     m_child->set_rect(m_rect.x, m_rect.y, childWidth, m_viewportHeight);
