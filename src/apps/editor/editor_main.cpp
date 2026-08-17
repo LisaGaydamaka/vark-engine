@@ -208,7 +208,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
     g_editor.sync_brushes();
 
-    // ---- Build UI ----
+        // ---- Build UI ----
     LOG_INFO("Creating UI root and widgets...");
     g_uiRoot = std::make_unique<UIRoot>();
 
@@ -269,6 +269,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         LOG_INFO("UITextField cancelled");
     });
     vboxContainer->add_child(std::move(textField));
+
+    // ---- Test button for Step 1 ----
+    auto testButton = std::make_unique<UIButton>("Test Click");
+    testButton->set_rect(0, 0, 120, 30);
+    testButton->set_on_click([]() {
+        LOG_INFO(">>> Test button clicked! (callback fired)");
+    });
+    vboxContainer->add_child(std::move(testButton));
+    // ---- end test button ----
 
     rightContainer->add_child(std::move(rightBg));
     rightContainer->add_child(std::move(vboxContainer));
