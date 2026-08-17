@@ -16,7 +16,7 @@ void BuildEditorUI(Editor& editor) {
 }
 
 // ------------------------------------------------------------------
-// Menu Bar
+// Menu Bar (unchanged)
 // ------------------------------------------------------------------
 static void BuildMenuBar(Editor& editor) {
     if (ImGui::BeginMainMenuBar()) {
@@ -53,7 +53,7 @@ static void BuildMenuBar(Editor& editor) {
 }
 
 // ------------------------------------------------------------------
-// Left Panel – Brush List (docked to left edge)
+// Left Panel – Brush List with Table, Drag‑Drop, Rename
 // ------------------------------------------------------------------
 static void BuildLeftPanel(Editor& editor) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -73,6 +73,7 @@ static void BuildLeftPanel(Editor& editor) {
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoSavedSettings);
 
+    // ---- Add buttons ----
     if (ImGui::Button("Add Box")) {
         editor.add_brush(BrushType::Add, ShapeType::Box);
     }
@@ -84,33 +85,87 @@ static void BuildLeftPanel(Editor& editor) {
     if (ImGui::Button("Sub Box")) {
         editor.add_brush(BrushType::Sub, ShapeType::Box);
     }
+    ImGui::SameLine();
+    if (ImGui::Button("Sub Wedge")) {
+        editor.add_brush(BrushType::Sub, ShapeType::Wedge);
+    }
 
     ImGui::Separator();
 
     const auto& brushes = editor.get_brushes();
     int selected = editor.get_selected_index();
 
-    ImGui::BeginChild("BrushList", ImVec2(0, 0), true);
-    for (int i = 0; i < (int)brushes.size(); ++i) {
-        const auto& b = brushes[i];
-        char label[128];
-        snprintf(label, sizeof(label), "[%d] %s %s (%.1f, %.1f, %.1f)",
-                 b.time,
-                 (b.type == BrushType::Add) ? "Add" : "Sub",
-                 (b.shape == ShapeType::Box) ? "Box" : "Wedge",
-                 b.center.x, b.center.y, b.center.z);
-        if (ImGui::Selectable(label, (selected == i))) {
-            editor.select_brush(i);
+    // ---- Table ----
+    if (ImGui::BeginTable("BrushTable", 2,
+            ImGuiTableFlags_BordersInnerV |
+            ImGuiTableFlags_Resizable |
+            ImGuiTableFlags_RowBg))
+    {
+        ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableHeadersRow();
+
+        for (int i = 0; i < (int)brushes.size(); ++i) {
+            ImGui::PushID(i);   // <--- UNIQUE ID PER ROW
+            const auto& b = brushes[i];
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            ImGui::Text("%d", b.time);
+            ImGui::TableSetColumnIndex(1);
+
+            // Selectable row
+            if (ImGui::Selectable(b.displayName.c_str(), (selected == i),
+                    ImGuiSelectableFlags_SpanAllColumns)) {
+                editor.select_brush(i);
+            }
+
+            // ---- Drag source ----
+            if (ImGui::BeginDragDropSource()) {
+                ImGui::SetDragDropPayload("BRUSH_ORDER", &i, sizeof(int));
+                ImGui::Text("Move %s", b.displayName.c_str());
+                ImGui::EndDragDropSource();
+            }
+
+            // ---- Drop target ----
+            if (ImGui::BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("BRUSH_ORDER")) {
+                    int srcIndex = *(const int*)payload->Data;
+                    if (srcIndex != i) {
+                        auto& mutableBrushes = editor.get_brushes_mutable();
+                        std::swap(mutableBrushes[srcIndex], mutableBrushes[i]);
+                        int oldSel = editor.get_selected_index();
+                        if (oldSel == srcIndex) editor.select_brush(i);
+                        else if (oldSel == i) editor.select_brush(srcIndex);
+                        editor.refresh_times();
+                    }
+                }
+                ImGui::EndDragDropTarget();
+            }
+
+            // ---- Rename popup on right-click ----
+            if (ImGui::BeginPopupContextItem()) {
+                static char nameBuffer[128];
+                strcpy_s(nameBuffer, b.displayName.c_str());
+                if (ImGui::InputText("Rename", nameBuffer, sizeof(nameBuffer),
+                        ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    auto& mutableBrushes = editor.get_brushes_mutable();
+                    mutableBrushes[i].displayName = nameBuffer;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::EndPopup();
+            }
+
+            ImGui::PopID();
         }
+        ImGui::EndTable();
     }
-    ImGui::EndChild();
 
     ImGui::End();
     ImGui::PopStyleVar();
 }
 
 // ------------------------------------------------------------------
-// Right Panel – Inspector (docked to right edge)
+// Right Panel – Inspector
 // ------------------------------------------------------------------
 static void BuildRightPanel(Editor& editor) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -159,6 +214,8 @@ static void BuildRightPanel(Editor& editor) {
 
     ImGui::Text("Type: %s", (b.type == BrushType::Add) ? "Add" : "Sub");
     ImGui::Text("Shape: %s", (b.shape == ShapeType::Box) ? "Box" : "Wedge");
+    ImGui::Text("Time: %d", b.time);
+    ImGui::Text("Name: %s", b.displayName.c_str());
 
     ImGui::Separator();
     ImGui::Text("Face Textures (first face only)");

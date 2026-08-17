@@ -275,6 +275,12 @@ void Editor::delete_selected() {
     m_selectedIndex = -1;
 }
 
+void Editor::refresh_times() {
+    for (size_t i = 0; i < m_brushes.size(); ++i) {
+        m_brushes[i].time = (int)i;
+    }
+}
+
 void Editor::add_brush(BrushType type, ShapeType shape) {
     Brush b;
     b.type = type;
@@ -282,9 +288,25 @@ void Editor::add_brush(BrushType type, ShapeType shape) {
     b.center = {0,0,0};
     b.size = {4,4,4};
     for (auto& f : b.faces) f = FaceTexture();
+
+    // Set default display name
+    switch (shape) {
+        case ShapeType::Box:
+            b.displayName = (type == BrushType::Add) ? "Add Box" : "Sub Box";
+            break;
+        case ShapeType::Wedge:
+            b.displayName = (type == BrushType::Add) ? "Add Wedge" : "Sub Wedge";
+            break;
+    }
+
+    // Set time to current size (will be 0,1,2,...)
+    b.time = (int)m_brushes.size();
+
     m_brushes.push_back(b);
     m_selectedIndex = (int)m_brushes.size() - 1;
+    refresh_times();  // ensure all times are sequential
 }
+
 
 void Editor::select_brush(int index) {
     if (index >= 0 && index < (int)m_brushes.size()) {

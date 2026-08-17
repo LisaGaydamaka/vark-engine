@@ -1,7 +1,7 @@
 #include "level.h"
 #include "physics/physics_world.h"
 #include "world/vmis_format.h"
-#include "world/vmis_io.h"        // NEW
+#include "world/vmis_io.h"
 #include "core/logger.h"
 #include <d3d11.h>
 #include <fstream>
@@ -14,10 +14,18 @@
 #pragma comment(lib, "d3d11.lib")
 
 // ----------------------------------------------------------------------
-// NEW: load_vmis
+// NEW: normalize_brush_times
 // ----------------------------------------------------------------------
-bool Level::load_vmis(const char* path, Renderer* renderer)
-{
+void Level::normalize_brush_times() {
+    for (size_t i = 0; i < brushes.size(); ++i) {
+        brushes[i].time = (int)i;
+    }
+}
+
+// ----------------------------------------------------------------------
+// load_vmis – reads .vmis, normalises times, builds renderables
+// ----------------------------------------------------------------------
+bool Level::load_vmis(const char* path, Renderer* renderer) {
     std::vector<Brush> loadedBrushes;
     std::vector<Vertex> verts;
     std::vector<uint32_t> indices;
@@ -33,8 +41,10 @@ bool Level::load_vmis(const char* path, Renderer* renderer)
     LOG_INFO("Loaded VMIS: %zu brushes, %zu vertices, %zu indices, %zu materials, %zu phys tris",
              loadedBrushes.size(), verts.size(), indices.size(), materials.size(), physTris.size());
 
-    // ---- Store brushes (for editor later) ----
     brushes = std::move(loadedBrushes);
+
+    // ---- Normalise times to sequential order ----
+    normalize_brush_times();
 
     // ---- Build renderable ----
     ID3D11Device* device = (ID3D11Device*)renderer->get_device();
@@ -104,38 +114,32 @@ bool Level::load_vmis(const char* path, Renderer* renderer)
     return true;
 }
 
-// ---- Build debug mesh ----
-void Level::build_debug_mesh(Renderer* renderer)
-{
+// ----------------------------------------------------------------------
+// build_debug_mesh – unchanged, but uses Renderable correctly
+// ----------------------------------------------------------------------
+void Level::build_debug_mesh(Renderer* renderer) {
     if (!renderer) return;
 
     ID3D11Device* device = (ID3D11Device*)renderer->get_device();
     if (!device) return;
 
-    // Clear previous debug data
     m_debugVertices.clear();
     m_debugIndices.clear();
     m_debugLineVertices.clear();
 
     if (m_collisionTriangles.empty()) return;
 
-    // Generate colors per triangle using golden ratio for nice distribution
     const float goldenRatio = 0.618033988749895f;
     size_t triCount = m_collisionTriangles.size();
 
-    // Expand triangles: each triangle gets its own 3 vertices with unique color
     m_debugVertices.reserve(triCount * 3);
     m_debugIndices.reserve(triCount * 3);
-
-    // For wireframe: each triangle adds 3 line segments (6 vertices) but we'll store lines as linelist (2 vertices per line)
-    m_debugLineVertices.reserve(triCount * 6); // 3 edges * 2 vertices
+    m_debugLineVertices.reserve(triCount * 6);
 
     for (size_t i = 0; i < triCount; ++i) {
         const Triangle& tri = m_collisionTriangles[i];
 
-        // Color from HSV: hue based on index, saturation 0.8, value 0.8
         float hue = fmodf(i * goldenRatio, 1.0f);
-        // Convert HSV to RGB (simple)
         float h6 = hue * 6.0f;
         float frac = h6 - floorf(h6);
         float p = 0.8f * (1.0f - 0.8f);
@@ -152,9 +156,7 @@ void Level::build_debug_mesh(Renderer* renderer)
             default: r = 0.8f; g = p; b = q; break;
         }
 
-        // Add 3 vertices for this triangle with the color
         Vec3 verts[3] = { tri.v0, tri.v1, tri.v2 };
-        // Compute UVs as dummy (0,0) for debug
         for (int j = 0; j < 3; ++j) {
             Vertex v;
             v.x = verts[j].x;
@@ -169,18 +171,15 @@ void Level::build_debug_mesh(Renderer* renderer)
         m_debugIndices.push_back(base + 1);
         m_debugIndices.push_back(base + 2);
 
-        // Wireframe edges (linelist)
-        // Edge 0-1
+        // Wireframe edges
         Vertex lv1 = { verts[0].x, verts[0].y, verts[0].z, 0,0, 1.0f,1.0f,1.0f };
         Vertex lv2 = { verts[1].x, verts[1].y, verts[1].z, 0,0, 1.0f,1.0f,1.0f };
         m_debugLineVertices.push_back(lv1);
         m_debugLineVertices.push_back(lv2);
-        // Edge 1-2
         lv1 = { verts[1].x, verts[1].y, verts[1].z, 0,0, 1.0f,1.0f,1.0f };
         lv2 = { verts[2].x, verts[2].y, verts[2].z, 0,0, 1.0f,1.0f,1.0f };
         m_debugLineVertices.push_back(lv1);
         m_debugLineVertices.push_back(lv2);
-        // Edge 2-0
         lv1 = { verts[2].x, verts[2].y, verts[2].z, 0,0, 1.0f,1.0f,1.0f };
         lv2 = { verts[0].x, verts[0].y, verts[0].z, 0,0, 1.0f,1.0f,1.0f };
         m_debugLineVertices.push_back(lv1);
@@ -212,7 +211,7 @@ void Level::build_debug_mesh(Renderer* renderer)
     }
     m_debugRenderable.indexCount = (int)m_debugIndices.size();
 
-    // ---- Wireframe (linelist) ----
+    // Wireframe (linelist)
     D3D11_BUFFER_DESC lbd = {};
     lbd.Usage = D3D11_USAGE_DEFAULT;
     lbd.ByteWidth = (UINT)(m_debugLineVertices.size() * sizeof(Vertex));
@@ -223,15 +222,16 @@ void Level::build_debug_mesh(Renderer* renderer)
         LOG_ERROR("Failed to create debug wireframe buffer (hr=0x%08X)", hr);
         return;
     }
-    // No index buffer needed for lines
     m_debugWireframe.indexBuffer.Reset();
-    m_debugWireframe.indexCount = (int)m_debugLineVertices.size(); // number of vertices for linelist
+    m_debugWireframe.indexCount = (int)m_debugLineVertices.size();
 
     LOG_INFO("Debug mesh built: %zu triangles, %zu line vertices", triCount, m_debugLineVertices.size());
 }
 
-void Level::set_debug_mode(bool enabled)
-{
+// ----------------------------------------------------------------------
+// Other Level methods (build, reload, render, shutdown, set_debug_mode)
+// ----------------------------------------------------------------------
+void Level::set_debug_mode(bool enabled) {
     if (m_debugMode == enabled) return;
     m_debugMode = enabled;
     LOG_INFO("Debug mode %s", enabled ? "ON" : "OFF");
@@ -251,23 +251,18 @@ bool Level::build(Renderer* renderer, const char* levelPath) {
     return false;
 }
 
-
 bool Level::reload(Renderer* renderer) {
     if (m_levelPath.empty()) {
         LOG_ERROR("Cannot reload: no level path set.");
         return false;
     }
-    // Clear existing renderables
     renderables.clear();
     labelRenderables.clear();
     m_collisionTriangles.clear();
-
-    // Reload
     return build(renderer, m_levelPath.c_str());
 }
 
-void Level::render(Renderer* renderer)
-{
+void Level::render(Renderer* renderer) {
     ID3D11DeviceContext* context = (ID3D11DeviceContext*)renderer->get_context();
     if (!context) {
         LOG_ERROR("Context is null in render()");
@@ -278,25 +273,23 @@ void Level::render(Renderer* renderer)
     UINT offset = 0;
 
     if (m_debugMode) {
-        // ---- Debug rendering: colored triangles + wireframe ----
         renderer->apply_pipeline();
-        renderer->set_texture(nullptr); // no texture, use vertex colors
+        renderer->set_texture(nullptr);
 
-        // Draw colored triangles
         if (m_debugRenderable.vertexBuffer && m_debugRenderable.indexBuffer) {
-            context->IASetVertexBuffers(0, 1, m_debugRenderable.vertexBuffer.GetAddressOf(), &stride, &offset);
+            ID3D11Buffer* vb = m_debugRenderable.vertexBuffer.Get();
+            context->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
             context->IASetIndexBuffer(m_debugRenderable.indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
             context->DrawIndexed(m_debugRenderable.indexCount, 0, 0);
         }
 
-        // Draw wireframe (linelist) on top
         if (m_debugWireframe.vertexBuffer) {
             renderer->draw_lines(m_debugWireframe.vertexBuffer.Get(), m_debugWireframe.indexCount);
         }
         return;
     }
 
-    // ---- Normal rendering ----
+    // Normal rendering
     renderer->apply_pipeline();
 
     for (size_t i = 0; i < renderables.size(); ++i) {
@@ -304,16 +297,18 @@ void Level::render(Renderer* renderer)
         if (!rend.vertexBuffer || !rend.indexBuffer) continue;
 
         renderer->set_texture(rend.textureView.Get());
-        context->IASetVertexBuffers(0, 1, rend.vertexBuffer.GetAddressOf(), &stride, &offset);
+        ID3D11Buffer* vb = rend.vertexBuffer.Get();
+        context->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
         context->IASetIndexBuffer(rend.indexBuffer.Get(), DXGI_FORMAT_R32_UINT, 0);
         context->DrawIndexed(rend.indexCount, 0, 0);
     }
 
-    // ---- Labels ----
+    // Labels
     if (!labelRenderables.empty()) {
         renderer->apply_font_pipeline();
         for (const Renderable& labelRend : labelRenderables) {
-            context->IASetVertexBuffers(0, 1, labelRend.vertexBuffer.GetAddressOf(), &stride, &offset);
+            ID3D11Buffer* vb = labelRend.vertexBuffer.Get();
+            context->IASetVertexBuffers(0, 1, &vb, &stride, &offset);
             context->IASetIndexBuffer(labelRend.indexBuffer.Get(), DXGI_FORMAT_R16_UINT, 0);
             context->DrawIndexed(labelRend.indexCount, 0, 0);
         }
@@ -321,14 +316,11 @@ void Level::render(Renderer* renderer)
     }
 }
 
-void Level::shutdown(Renderer* renderer)
-{
+void Level::shutdown(Renderer* renderer) {
     (void)renderer;
     renderables.clear();
     labelRenderables.clear();
     m_collisionTriangles.clear();
-
-    // Debug resources auto-released by ComPtr
     m_debugVertices.clear();
     m_debugIndices.clear();
     m_debugLineVertices.clear();
