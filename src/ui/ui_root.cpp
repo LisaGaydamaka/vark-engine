@@ -30,7 +30,7 @@ UIWidget* UIRoot::find_widget_at(float x, float y) {
 
 void UIRoot::render_all(UIRenderer* ui) {
     layout_all();
-    UIWidget::render_all(ui);  // base handles clipping
+    UIWidget::render_all(ui);
 }
 
 bool UIRoot::on_mouse_down(float x, float y, int button) {
@@ -71,6 +71,7 @@ bool UIRoot::on_mouse_up(float x, float y, int button) {
     return false;
 }
 
+// ---- FIX: ensure old hovered widget gets a leave event ----
 bool UIRoot::on_mouse_move(float x, float y) {
     if (m_capturedWidget) {
         m_capturedWidget->on_mouse_move(x, y);
@@ -78,6 +79,11 @@ bool UIRoot::on_mouse_move(float x, float y) {
     }
     UIWidget* target = find_widget_at(x, y);
     if (target != m_hoveredWidget) {
+        // Notify the old hovered widget (if any) that the mouse moved
+        // so it can update its hover state (usually to false)
+        if (m_hoveredWidget) {
+            m_hoveredWidget->on_mouse_move(x, y);
+        }
         m_hoveredWidget = target;
         if (target) {
             const UIRect& r = target->get_rect();
@@ -87,6 +93,7 @@ bool UIRoot::on_mouse_move(float x, float y) {
             LOG_INFO("HOVER: None at (%f, %f)", x, y);
         }
     }
+    // Always send the move event to the current target (if any)
     if (target) {
         target->on_mouse_move(x, y);
     }
@@ -113,7 +120,6 @@ bool UIRoot::on_char(char c) {
     return false;
 }
 
-// ---- FIX: prevent infinite recursion by not calling on_mouse_wheel on the root itself ----
 bool UIRoot::on_mouse_wheel(float delta, float x, float y) {
     UIWidget* target = find_widget_at(x, y);
     while (target && target != this) {
