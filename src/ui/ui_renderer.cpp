@@ -2,6 +2,7 @@
 #include "../common/renderer/renderer.h"
 #include "../common/core/font.h"
 #include "../common/core/logger.h"
+#include "ui_style.h"          // <-- NEW: include style constants
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <cstring>
@@ -291,7 +292,6 @@ void UIRenderer::restore_engine_pipeline()
 void UIRenderer::draw_rect(float x, float y, float w, float h, float r, float g, float b, float a)
 {
     if (!m_initialized) return;
-    // ---- NEW: skip if scissor rect is empty ----
     if (m_currentScissor.right <= m_currentScissor.left ||
         m_currentScissor.bottom <= m_currentScissor.top) {
         return;
@@ -346,10 +346,15 @@ void UIRenderer::draw_rect(float x, float y, float w, float h, float r, float g,
     restore_engine_pipeline();
 }
 
+// ---- NEW: get text width using style constants ----
+float UIRenderer::get_text_width(const char* text) const {
+    if (!text) return 0.0f;
+    return (float)strlen(text) * UIStyle::fontWidth;
+}
+
 void UIRenderer::draw_text(float x, float y, const char* text, float r, float g, float b, float a)
 {
     if (!m_initialized || !m_fontReady || !text || !text[0]) return;
-    // ---- NEW: skip if scissor rect is empty ----
     if (m_currentScissor.right <= m_currentScissor.left ||
         m_currentScissor.bottom <= m_currentScissor.top) {
         return;
@@ -371,8 +376,9 @@ void UIRenderer::draw_text(float x, float y, const char* text, float r, float g,
 
     float cursorX = x;
     float cursorY = y;
-    float charW = 8.0f;
-    float charH = 8.0f;
+    // ---- Use style constants instead of hardcoded 8.0f ----
+    float charW = UIStyle::fontWidth;
+    float charH = UIStyle::fontSize;
 
     for (const char* ch = text; *ch && vertexCount < maxChars * 6; ++ch) {
         if (*ch == ' ') {
