@@ -38,10 +38,11 @@ public:
     float get_stretch() const { return m_stretch; }
 
     // ---- Clipping ----
-    // Whether to clip the widget's own content (drawn in render()) to its rect.
     virtual bool clips_self() const { return true; }
-    // Whether to clip child widgets to this widget's rect.
     virtual bool clips_children() const { return false; }
+
+    // ---- NEW: scroll callback (for widgets that can scroll) ----
+    virtual void set_scroll_callback(std::function<void(float)> callback) { (void)callback; }
 
     // ---- Virtual event handlers ----
     virtual void render(UIRenderer* ui) {}

@@ -113,9 +113,10 @@ bool UIRoot::on_char(char c) {
     return false;
 }
 
+// ---- FIX: prevent infinite recursion by not calling on_mouse_wheel on the root itself ----
 bool UIRoot::on_mouse_wheel(float delta, float x, float y) {
     UIWidget* target = find_widget_at(x, y);
-    while (target) {
+    while (target && target != this) {
         if (target->on_mouse_wheel(delta, x, y))
             return true;
         target = target->get_parent();

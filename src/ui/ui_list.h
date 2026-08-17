@@ -23,6 +23,9 @@ public:
     // ---- Layout preferred size ----
     float get_preferred_height() const override { return get_content_height(); }
 
+    // ---- Scroll callback (to notify container) ----
+    void set_scroll_callback(std::function<void(float)> callback) override { m_scrollCallback = callback; }
+
     bool is_interactive() const override { return true; }
 
     void set_on_selection_changed(std::function<void(int)> callback) { m_onSelectionChanged = callback; }
@@ -32,6 +35,7 @@ public:
     bool on_mouse_down(float x, float y, int button) override;
     bool on_mouse_up(float x, float y, int button) override;
     bool on_mouse_move(float x, float y) override;
+    bool on_mouse_wheel(float delta, float x, float y) override;   // NEW
 
 private:
     struct Item {
@@ -46,6 +50,7 @@ private:
 
     std::function<void(int)> m_onSelectionChanged;
     std::function<void(const std::vector<int>&)> m_onReordered;
+    std::function<void(float)> m_scrollCallback;   // NEW
 
     bool m_dragging = false;
     int m_dragStartIndex = -1;

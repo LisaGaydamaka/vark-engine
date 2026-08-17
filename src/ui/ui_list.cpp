@@ -216,3 +216,23 @@ bool UIList::on_mouse_move(float x, float y) {
         return false;
     }
 }
+
+bool UIList::on_mouse_wheel(float delta, float x, float y) {
+    (void)x; (void)y;  // we only care about vertical scroll
+    if (m_items.empty()) return false;
+
+    float step = m_itemHeight * 2.0f;   // scroll by 2 items per notch
+    float maxOffset = std::max(0.0f, get_content_height() - m_rect.h);
+    float newOffset = m_scrollOffset - delta * step;
+    newOffset = std::clamp(newOffset, 0.0f, maxOffset);
+
+    if (newOffset != m_scrollOffset) {
+        m_scrollOffset = newOffset;
+        // Notify the container (if any) about the offset change
+        if (m_scrollCallback) {
+            m_scrollCallback(m_scrollOffset);
+        }
+        return true;
+    }
+    return false;
+}

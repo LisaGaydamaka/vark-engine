@@ -35,6 +35,10 @@ void UIScrollContainer::set_child(std::unique_ptr<UIWidget> child) {
     m_child = child.get();
     m_scrollable = scrollable;
     add_child(std::move(child));
+    m_child->set_scroll_callback([this](float offset) {
+        m_scrollOffset = offset;
+        update_scrollbar();
+    });
 }
 
 void UIScrollContainer::layout() {
