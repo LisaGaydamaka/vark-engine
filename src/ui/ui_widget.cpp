@@ -1,5 +1,6 @@
 #include "ui_widget.h"
 #include "ui_root.h"
+#include "core/logger.h"
 
 void UIWidget::add_child(std::unique_ptr<UIWidget> child) {
     if (child) {
@@ -30,4 +31,26 @@ UIRoot* UIWidget::get_root() {
         current = current->m_parent;
     }
     return nullptr;
+}
+
+void UIWidget::request_focus() {
+    LOG_INFO("UIWidget::request_focus() for %s", typeid(*this).name());
+    UIRoot* root = get_root();
+    if (root) {
+        root->set_focused_widget(this);
+    } else {
+        LOG_WARN("UIWidget::request_focus: no root, setting local focus only");
+        set_focus(true);
+    }
+}
+
+void UIWidget::set_focus(bool focused) {
+    LOG_INFO("UIWidget::set_focus(%d) for %s", focused, typeid(*this).name());
+    if (m_focused == focused) return;
+    m_focused = focused;
+    if (focused) {
+        on_focus_gained();
+    } else {
+        on_focus_lost();
+    }
 }

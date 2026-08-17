@@ -36,15 +36,17 @@ public:
     virtual bool on_char(char c) { return false; }
 
     virtual bool hit_test(float x, float y) const { return m_rect.contains(x, y); }
-
-    // ---- NEW: priority hit testing ----
-    // Override this to return true for areas that should take precedence over children.
     virtual bool is_priority_hit(float x, float y) const { return false; }
 
     virtual void render_all(UIRenderer* ui);
     virtual void layout_all();
 
-    void set_focused(bool focused) { m_focused = focused; }
+    // ---- Focus management ----
+    void request_focus();   // call this to ask for focus
+    void set_focus(bool focused);  // called by root
+    virtual void on_focus_gained() {}
+    virtual void on_focus_lost() {}
+
     bool is_focused() const { return m_focused; }
 
 protected:

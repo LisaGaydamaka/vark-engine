@@ -19,6 +19,7 @@
 #include "ui/ui_button.h"
 #include "ui/ui_splitter.h"
 #include "ui/ui_list.h"
+#include "ui/ui_text_field.h"
 
 static HWND g_hwnd = nullptr;
 static Renderer g_renderer;
@@ -30,11 +31,6 @@ static std::unique_ptr<UIRoot> g_uiRoot;
 static int g_clickX = 0, g_clickY = 0;
 static bool g_clickValid = false;
 static int g_mouseX = 0, g_mouseY = 0;
-
-// ---- Logging helper for mouse events ----
-static void log_mouse_event(const char* eventName, int x, int y) {
-    LOG_INFO("WINDOW: %s at (%d, %d)", eventName, x, y);
-}
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
@@ -60,13 +56,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             int y = GET_Y_LPARAM(lParam);
             g_mouseX = x;
             g_mouseY = y;
-
-            // Log every 10th move to avoid spam (optional)
-            static int moveCounter = 0;
-            if (++moveCounter % 10 == 0) {
-                log_mouse_event("MOUSEMOVE", x, y);
-            }
-
             static int lastX = x, lastY = y;
             bool leftDown   = (wParam & MK_LBUTTON) != 0;
             bool middleDown = (wParam & MK_MBUTTON) != 0;
@@ -89,24 +78,18 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         case WM_LBUTTONDOWN: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
-            log_mouse_event("LBUTTONDOWN", x, y);
             g_clickX = x;
             g_clickY = y;
             g_clickValid = true;
             g_editor.on_mouse_button(0, true);
-
             if (g_uiRoot) {
-                LOG_INFO("WINDOW: Forwarding LBUTTONDOWN to UIRoot");
                 g_uiRoot->on_mouse_down((float)x, (float)y, 0);
-            } else {
-                LOG_WARN("WINDOW: g_uiRoot is null!");
             }
             return 0;
         }
         case WM_LBUTTONUP: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
-            log_mouse_event("LBUTTONUP", x, y);
             if (g_clickValid && abs(x - g_clickX) < 5 && abs(y - g_clickY) < 5) {
                 bool consumed = g_editor.get_ui()->on_mouse_click(x, y);
                 if (!consumed) {
@@ -119,7 +102,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             g_clickValid = false;
             g_editor.on_mouse_button(0, false);
             if (g_uiRoot) {
-                LOG_INFO("WINDOW: Forwarding LBUTTONUP to UIRoot");
                 g_uiRoot->on_mouse_up((float)x, (float)y, 0);
             }
             return 0;
@@ -234,7 +216,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     splitter->set_rect(150.0f, 150.0f, 500.0f, 400.0f);
     splitter->set_hit_thickness(20.0f);
 
-    // ---- Left container with fill layout ----
     auto leftContainer = std::make_unique<UIContainer>();
     leftContainer->set_layout(std::make_unique<UIFillLayout>());
 
@@ -243,7 +224,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     leftBg->set_border(0.3f, 0.3f, 0.4f, 1.0f, 1.0f);
 
     auto list = std::make_unique<UIList>();
-    // Use dummy data (later we'll sync with actual brushes)
     std::vector<std::pair<std::string, int>> brushItems = {
         {"Brush 0 (Add Box)", 0},
         {"Brush 1 (Sub Wedge)", 1},
@@ -254,20 +234,47 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     list->set_on_selection_changed([](int idx) {
         LOG_INFO("UIList: selection changed to index %d", idx);
     });
+    list->set_on_reordered([](const std::vector<int>& order) {
+        std::string log = "UIList: new order: ";
+        for (int idx : order) {
+            log += std::to_string(idx) + " ";
+        }
+        LOG_INFO("%s", log.c_str());
+    });
 
     leftContainer->add_child(std::move(leftBg));
     leftContainer->add_child(std::move(list));
 
-    // ---- Right panel placeholder ----
-    auto rightPanel = std::make_unique<UIPanel>();
-    rightPanel->set_background(0.1f, 0.1f, 0.15f, 1.0f);
-    rightPanel->set_border(0.3f, 0.3f, 0.4f, 1.0f, 1.0f);
-    auto rightLabel = std::make_unique<UILabel>("Inspector (coming soon)", 0.8f, 0.8f, 0.8f, 1.0f);
-    rightLabel->set_rect(10.0f, 10.0f, 200.0f, 20.0f);
-    rightPanel->add_child(std::move(rightLabel));
+    auto rightContainer = std::make_unique<UIContainer>();
+    rightContainer->set_layout(std::make_unique<UIFillLayout>());
+
+    auto rightBg = std::make_unique<UIPanel>();
+    rightBg->set_background(0.1f, 0.1f, 0.15f, 1.0f);
+    rightBg->set_border(0.3f, 0.3f, 0.4f, 1.0f, 1.0f);
+
+    auto vboxContainer = std::make_unique<UIContainer>();
+    vboxContainer->set_layout(std::make_unique<UIVBoxLayout>(5.0f));
+
+    auto label = std::make_unique<UILabel>("Value:", 0.8f, 0.8f, 0.8f, 1.0f);
+    label->set_rect(0, 0, 80, 20);
+    vboxContainer->add_child(std::move(label));
+
+    auto textField = std::make_unique<UITextField>();
+    textField->set_rect(0, 0, 120, 20);
+    textField->set_placeholder("Enter value...");
+    textField->set_commit_callback([](const std::string& val) {
+        LOG_INFO("UITextField committed: %s", val.c_str());
+    });
+    textField->set_cancel_callback([]() {
+        LOG_INFO("UITextField cancelled");
+    });
+    vboxContainer->add_child(std::move(textField));
+
+    rightContainer->add_child(std::move(rightBg));
+    rightContainer->add_child(std::move(vboxContainer));
 
     splitter->add_child(std::move(leftContainer));
-    splitter->add_child(std::move(rightPanel));
+    splitter->add_child(std::move(rightContainer));
     g_uiRoot->add_child(std::move(splitter));
 
     LOG_INFO("UI built, entering main loop.");

@@ -20,8 +20,13 @@ public:
     void set_capture(UIWidget* widget, bool capture);
     UIWidget* get_captured_widget() const { return m_capturedWidget; }
 
+    // ---- Focus management ----
+    void set_focused_widget(UIWidget* widget);
+    UIWidget* get_focused_widget() const { return m_focusedWidget; }
+
 private:
     UIWidget* find_widget_at(float x, float y);
     UIWidget* m_capturedWidget = nullptr;
+    UIWidget* m_focusedWidget = nullptr;
     UIWidget* m_hoveredWidget = nullptr;
 };

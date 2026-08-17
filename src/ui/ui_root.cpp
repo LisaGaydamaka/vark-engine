@@ -4,33 +4,25 @@
 #include <typeinfo>
 
 static UIWidget* find_deepest_widget(UIWidget* parent, float x, float y) {
-    // Check priority hit first (e.g., splitter handle)
     if (parent->is_priority_hit(x, y)) {
         LOG_INFO("UI: priority hit on %s", typeid(*parent).name());
         return parent;
     }
-
     const auto& children = parent->get_children();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
         UIWidget* child = it->get();
         if (child->hit_test(x, y)) {
-            LOG_INFO("UI: child %s hit at (%f,%f)", typeid(*child).name(), x, y);
             UIWidget* deeper = find_deepest_widget(child, x, y);
             if (deeper) {
-                LOG_INFO("UI: returning deeper %s", typeid(*deeper).name());
                 return deeper;
             }
-            LOG_INFO("UI: returning child %s", typeid(*child).name());
             return child;
-        } else {
-            LOG_INFO("UI: child %s miss at (%f,%f)", typeid(*child).name(), x, y);
         }
     }
     return nullptr;
 }
 
 UIWidget* UIRoot::find_widget_at(float x, float y) {
-    LOG_INFO("UI: find_widget_at(%f, %f)", x, y);
     return find_deepest_widget(this, x, y);
 }
 
@@ -45,23 +37,31 @@ void UIRoot::render_all(UIRenderer* ui) {
 bool UIRoot::on_mouse_down(float x, float y, int button) {
     LOG_INFO("UI: on_mouse_down(%f, %f, %d)", x, y, button);
     if (m_capturedWidget) {
-        LOG_INFO("UI: captured widget %s gets event", typeid(*m_capturedWidget).name());
         m_capturedWidget->on_mouse_down(x, y, button);
         return true;
     }
     UIWidget* target = find_widget_at(x, y);
     if (target) {
-        LOG_INFO("UI: Target found: %s", typeid(*target).name());
+        LOG_INFO("UI: target found: %s", typeid(*target).name());
+        // If there is a focused widget and the target is not the focused widget,
+        // clear focus.
+        if (m_focusedWidget && target != m_focusedWidget) {
+            LOG_INFO("UI: target different from focused, unfocusing");
+            set_focused_widget(nullptr);
+        }
+        // Let the target handle the click (it may request focus)
         bool consumed = target->on_mouse_down(x, y, button);
-        LOG_INFO("UI: Event consumed = %d", consumed);
         return consumed;
+    } else {
+        LOG_INFO("UI: no target found, unfocusing");
+        if (m_focusedWidget) {
+            set_focused_widget(nullptr);
+        }
+        return false;
     }
-    LOG_WARN("UI: No target found for click at (%f, %f)", x, y);
-    return false;
 }
 
 bool UIRoot::on_mouse_up(float x, float y, int button) {
-    LOG_INFO("UI: on_mouse_up(%f, %f, %d)", x, y, button);
     if (m_capturedWidget) {
         bool consumed = m_capturedWidget->on_mouse_up(x, y, button);
         set_capture(m_capturedWidget, false);
@@ -69,10 +69,7 @@ bool UIRoot::on_mouse_up(float x, float y, int button) {
     }
     UIWidget* target = find_widget_at(x, y);
     if (target) {
-        LOG_INFO("UI: Target found: %s", typeid(*target).name());
-        bool consumed = target->on_mouse_up(x, y, button);
-        LOG_INFO("UI: Event consumed = %d", consumed);
-        return consumed;
+        return target->on_mouse_up(x, y, button);
     }
     return false;
 }
@@ -100,22 +97,48 @@ bool UIRoot::on_mouse_move(float x, float y) {
 }
 
 bool UIRoot::on_key_down(int key, bool ctrl, bool shift) {
-    // Could forward to focused widget later
+    LOG_INFO("UI: on_key_down(%d, %d, %d)", key, ctrl, shift);
+    if (m_focusedWidget) {
+        LOG_INFO("UI: forwarding to focused widget: %s", typeid(*m_focusedWidget).name());
+        return m_focusedWidget->on_key_down(key, ctrl, shift);
+    }
+    LOG_WARN("UI: no focused widget for key down");
     return false;
 }
 
 bool UIRoot::on_char(char c) {
+    LOG_INFO("UI: on_char('%c')", c);
+    if (m_focusedWidget) {
+        LOG_INFO("UI: forwarding to focused widget: %s", typeid(*m_focusedWidget).name());
+        return m_focusedWidget->on_char(c);
+    }
+    LOG_WARN("UI: no focused widget for char");
     return false;
 }
 
 void UIRoot::set_capture(UIWidget* widget, bool capture) {
     if (capture) {
         m_capturedWidget = widget;
-        LOG_INFO("UI: capture set to %s", typeid(*widget).name());
     } else {
         if (m_capturedWidget == widget) {
             m_capturedWidget = nullptr;
-            LOG_INFO("UI: capture released");
         }
+    }
+}
+
+void UIRoot::set_focused_widget(UIWidget* widget) {
+    LOG_INFO("UI: set_focused_widget called with %s", widget ? typeid(*widget).name() : "null");
+    if (m_focusedWidget == widget) {
+        LOG_INFO("UI: already focused, returning");
+        return;
+    }
+    if (m_focusedWidget) {
+        LOG_INFO("UI: unfocusing old widget");
+        m_focusedWidget->set_focus(false);
+    }
+    m_focusedWidget = widget;
+    if (widget) {
+        LOG_INFO("UI: focusing new widget");
+        widget->set_focus(true);
     }
 }
