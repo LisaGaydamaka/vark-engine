@@ -3,6 +3,7 @@
 #include "ui_renderer.h"
 #include "ui_style.h"
 #include <algorithm>
+#include <cmath>   // for std::floor
 
 UISplitter::UISplitter(Orientation orient, float initialRatio)
     : m_orientation(orient), m_ratio(initialRatio) {
@@ -22,19 +23,27 @@ void UISplitter::layout() {
     float h = m_rect.h;
 
     if (m_orientation == Orientation::Vertical) {
+        // ---- Round down the first width to avoid sub‑pixel gaps ----
         float firstW = w * m_ratio;
+        firstW = std::floor(firstW);
         float secondW = w - firstW - m_handleThickness;
+        if (secondW < 0.0f) secondW = 0.0f;
+
         first->set_rect(x, y, firstW, h);
         second->set_rect(x + firstW + m_handleThickness, y, secondW, h);
     } else {
+        // ---- Round down the first height similarly ----
         float firstH = h * m_ratio;
+        firstH = std::floor(firstH);
         float secondH = h - firstH - m_handleThickness;
+        if (secondH < 0.0f) secondH = 0.0f;
+
         first->set_rect(x, y, w, firstH);
         second->set_rect(x, y + firstH + m_handleThickness, w, secondH);
     }
 
-    if (first->get_rect().w < 0) first->set_rect(x, y, 0, h);
-    if (second->get_rect().w < 0) second->set_rect(x + w - m_handleThickness, y, 0, h);
+    // Safety: if the second panel got zero or negative size, clamp it to 0.
+    // (Already handled above.)
 }
 
 void UISplitter::render(UIRenderer* ui) {
@@ -73,7 +82,6 @@ void UISplitter::render(UIRenderer* ui) {
                       UIStyle::splitterHandleBorderDarkR, UIStyle::splitterHandleBorderDarkG, UIStyle::splitterHandleBorderDarkB, UIStyle::splitterHandleBorderDarkA);
     }
 }
-
 
 bool UISplitter::is_on_handle(float x, float y) const {
     if (m_children.size() != 2) return false;
