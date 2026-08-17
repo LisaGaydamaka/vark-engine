@@ -2,9 +2,16 @@
 #include "ui_root.h"
 #include "core/logger.h"
 
+// ---- NEW: destructor that notifies root ----
+UIWidget::~UIWidget() {
+    if (auto root = get_root()) {
+        root->notify_widget_destroyed(this);
+    }
+}
+
 void UIWidget::add_child(std::unique_ptr<UIWidget> child) {
     if (child) {
-        child->set_parent(this);   // use set_parent instead of direct access
+        child->set_parent(this);
         m_children.push_back(std::move(child));
     }
 }

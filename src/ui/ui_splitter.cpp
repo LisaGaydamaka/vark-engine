@@ -129,9 +129,12 @@ bool UISplitter::on_mouse_up(float x, float y, int button) {
     return false;
 }
 
+// ---- FIX: force layout after ratio change ----
 bool UISplitter::on_mouse_move(float x, float y) {
     if (m_dragging) {
         update_ratio_from_mouse(x, y);
+        UIRoot* root = get_root();
+        if (root) root->layout_all();
         return true;
     }
     return false;

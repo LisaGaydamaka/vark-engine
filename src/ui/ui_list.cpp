@@ -36,8 +36,10 @@ void UIList::set_selected(int index) {
     }
 }
 
+// ---- FIX: division by zero guard ----
 int UIList::get_item_at_y(float y) const {
-    float relY = y - m_rect.y + m_scrollOffset; // account for scroll offset
+    if (m_itemHeight <= 0.0f) return -1;
+    float relY = y - m_rect.y + m_scrollOffset;
     int index = (int)(relY / m_itemHeight);
     if (index < 0) return -1;
     if (index >= (int)m_items.size()) return -1;
@@ -78,9 +80,8 @@ void UIList::render(UIRenderer* ui) {
     const float fontHeight = 8.0f;
     const float textOffsetY = (itemHeight - fontHeight) * 0.5f;
 
-    // Compute visible range based on scroll offset
     int startIndex = (int)(m_scrollOffset / itemHeight);
-    int endIndex = startIndex + (int)(m_rect.h / itemHeight) + 2; // +2 for safety
+    int endIndex = startIndex + (int)(m_rect.h / itemHeight) + 2;
     startIndex = std::max(0, startIndex);
     endIndex = std::min((int)m_items.size(), endIndex);
 
@@ -108,7 +109,6 @@ void UIList::render(UIRenderer* ui) {
         y += itemHeight;
     }
 
-    // Draw insertion line at end if dragging and target is beyond visible
     if (m_dragging && m_dragCurrentIndex == (int)m_items.size()) {
         float yLine = m_rect.y - m_scrollOffset + m_items.size() * itemHeight;
         if (yLine >= m_rect.y && yLine <= m_rect.y + m_rect.h) {
@@ -119,7 +119,6 @@ void UIList::render(UIRenderer* ui) {
     ui->pop_clip_rect();
 }
 
-// ---- Input (unchanged except get_item_at_y now accounts for offset) ----
 bool UIList::on_mouse_down(float x, float y, int button) {
     if (button != 0) return false;
 
@@ -190,11 +189,16 @@ bool UIList::on_mouse_move(float x, float y) {
         m_dragCurrentIndex = index;
         return true;
     } else {
-        int index = get_item_at_y(y);
-        if (index >= 0 && index < (int)m_items.size()) {
-            m_hoveredIndex = index;
-        } else {
+        // ---- FIX: reset hover if outside ----
+        if (!m_rect.contains(x, y)) {
             m_hoveredIndex = -1;
+        } else {
+            int index = get_item_at_y(y);
+            if (index >= 0 && index < (int)m_items.size()) {
+                m_hoveredIndex = index;
+            } else {
+                m_hoveredIndex = -1;
+            }
         }
         return false;
     }

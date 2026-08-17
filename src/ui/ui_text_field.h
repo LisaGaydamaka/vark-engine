@@ -30,9 +30,10 @@ private:
     std::string m_text;
     std::string m_placeholder;
     int m_cursorPos = 0;
-    int m_selectionStart = 0;   // start of selection (inclusive)
-    int m_selectionEnd = 0;     // end of selection (exclusive)
-    float m_blinkTimer = 0.0f;
+    int m_selectionStart = 0;
+    int m_selectionEnd = 0;
+    // ---- FIX: moved from static to member ----
+    float m_blinkAccumulator = 0.0f;
     bool m_cursorVisible = true;
     bool m_dragging = false;
 
@@ -51,7 +52,6 @@ private:
     void cut_to_clipboard();
     void paste_from_clipboard();
 
-    // Helper: get the selected text range (normalized)
     void get_selection(int& start, int& end) const;
     void delete_selection();
     void replace_selection(const std::string& text);

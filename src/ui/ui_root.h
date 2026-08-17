@@ -16,14 +16,16 @@ public:
     bool on_mouse_move(float x, float y) override;
     bool on_key_down(int key, bool ctrl, bool shift) override;
     bool on_char(char c) override;
-    bool on_mouse_wheel(float delta, float x, float y) override;   // <-- NEW
+    bool on_mouse_wheel(float delta, float x, float y) override;
 
     void set_capture(UIWidget* widget, bool capture);
     UIWidget* get_captured_widget() const { return m_capturedWidget; }
 
-    // ---- Focus management ----
     void set_focused_widget(UIWidget* widget);
     UIWidget* get_focused_widget() const { return m_focusedWidget; }
+
+    // ---- NEW: notify widget destruction ----
+    void notify_widget_destroyed(UIWidget* widget);
 
 private:
     UIWidget* find_widget_at(float x, float y);

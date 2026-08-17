@@ -16,7 +16,7 @@ struct UIRect {
 class UIWidget {
 public:
     UIWidget() = default;
-    virtual ~UIWidget() = default;
+    virtual ~UIWidget();   // <-- now declared, but not defined inline
 
     void set_rect(float x, float y, float w, float h) { m_rect = {x, y, w, h}; }
     const UIRect& get_rect() const { return m_rect; }
@@ -41,13 +41,11 @@ public:
     virtual bool hit_test(float x, float y) const { return m_rect.contains(x, y); }
     virtual bool is_priority_hit(float x, float y) const { return false; }
 
-    // ---- NEW: indicate if the widget handles mouse events ----
     virtual bool is_interactive() const { return false; }
 
     virtual void render_all(UIRenderer* ui);
     virtual void layout_all();
 
-    // ---- Focus management ----
     void request_focus();
     void set_focus(bool focused);
     virtual void on_focus_gained() {}
@@ -55,7 +53,6 @@ public:
 
     bool is_focused() const { return m_focused; }
 
-    // ---- Content height (for scrolling) ----
     virtual float get_content_height() const { return 0.0f; }
 
 protected:

@@ -4,25 +4,19 @@
 #include <typeinfo>
 
 static UIWidget* find_deepest_widget(UIWidget* parent, float x, float y) {
-    // Check children (back-to-front)
     const auto& children = parent->get_children();
     for (auto it = children.rbegin(); it != children.rend(); ++it) {
         UIWidget* child = it->get();
         if (child->hit_test(x, y)) {
-            // Recurse into this child
             UIWidget* deeper = find_deepest_widget(child, x, y);
-            // If recursion found an interactive widget, return it
             if (deeper && deeper->is_interactive()) {
                 return deeper;
             }
-            // Otherwise, if the child itself is interactive, return it
             if (child->is_interactive()) {
                 return child;
             }
-            // If neither, continue to next sibling
         }
     }
-    // No interactive child found; check if parent has a priority hit (e.g., splitter handle)
     if (parent->is_priority_hit(x, y)) {
         LOG_INFO("UI: priority hit on %s", typeid(*parent).name());
         return parent;
@@ -159,4 +153,11 @@ void UIRoot::set_focused_widget(UIWidget* widget) {
         LOG_INFO("UI: focusing new widget");
         widget->set_focus(true);
     }
+}
+
+// ---- NEW: notify widget destruction ----
+void UIRoot::notify_widget_destroyed(UIWidget* widget) {
+    if (m_capturedWidget == widget) m_capturedWidget = nullptr;
+    if (m_focusedWidget == widget) m_focusedWidget = nullptr;
+    if (m_hoveredWidget == widget) m_hoveredWidget = nullptr;
 }

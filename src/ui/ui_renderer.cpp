@@ -291,6 +291,11 @@ void UIRenderer::restore_engine_pipeline()
 void UIRenderer::draw_rect(float x, float y, float w, float h, float r, float g, float b, float a)
 {
     if (!m_initialized) return;
+    // ---- NEW: skip if scissor rect is empty ----
+    if (m_currentScissor.right <= m_currentScissor.left ||
+        m_currentScissor.bottom <= m_currentScissor.top) {
+        return;
+    }
 
     m_context->VSGetShader(&m_savedVS, nullptr, nullptr);
     m_context->PSGetShader(&m_savedPS, nullptr, nullptr);
@@ -344,7 +349,12 @@ void UIRenderer::draw_rect(float x, float y, float w, float h, float r, float g,
 void UIRenderer::draw_text(float x, float y, const char* text, float r, float g, float b, float a)
 {
     if (!m_initialized || !m_fontReady || !text || !text[0]) return;
-
+    // ---- NEW: skip if scissor rect is empty ----
+    if (m_currentScissor.right <= m_currentScissor.left ||
+        m_currentScissor.bottom <= m_currentScissor.top) {
+        return;
+    }
+    
     m_context->VSGetShader(&m_savedVS, nullptr, nullptr);
     m_context->PSGetShader(&m_savedPS, nullptr, nullptr);
     m_context->IAGetInputLayout(&m_savedInputLayout);

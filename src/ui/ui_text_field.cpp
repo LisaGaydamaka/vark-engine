@@ -16,7 +16,6 @@ void UITextField::set_text(const std::string& text) {
     m_selectionStart = m_selectionEnd = m_cursorPos;
 }
 
-// ---- Render (unchanged from original) ----
 void UITextField::render(UIRenderer* ui) {
     // Background
     ui->draw_rect(m_rect.x, m_rect.y, m_rect.w, m_rect.h, 0.15f, 0.15f, 0.2f, 1.0f);
@@ -31,13 +30,11 @@ void UITextField::render(UIRenderer* ui) {
     float textX = m_rect.x + 4.0f;
     float textY = m_rect.y + (m_rect.h - 8.0f) * 0.5f;
 
-    // Determine display string
     std::string display = m_text;
     if (display.empty() && !m_focused) {
         display = m_placeholder;
     }
 
-    // If focused and there is a selection, draw it
     if (m_focused && m_selectionStart != m_selectionEnd) {
         int selStart = std::min(m_selectionStart, m_selectionEnd);
         int selEnd = std::max(m_selectionStart, m_selectionEnd);
@@ -46,7 +43,6 @@ void UITextField::render(UIRenderer* ui) {
         ui->draw_rect(selX, m_rect.y + 2, selW, m_rect.h - 4, 0.3f, 0.5f, 0.8f, 0.8f);
     }
 
-    // Draw text
     if (!display.empty()) {
         float r = m_focused ? 1.0f : 0.7f;
         float g = m_focused ? 1.0f : 0.7f;
@@ -54,13 +50,12 @@ void UITextField::render(UIRenderer* ui) {
         ui->draw_text(textX, textY, display.c_str(), r, g, b, 1.0f);
     }
 
-    // Draw cursor if focused and no selection
+    // ---- FIX: cursor blink using member variables ----
     if (m_focused && m_selectionStart == m_selectionEnd) {
-        static float time = 0.0f;
-        time += 1.0f / 60.0f;
-        if (time > 0.5f) {
+        m_blinkAccumulator += 1.0f / 60.0f;
+        if (m_blinkAccumulator > 0.5f) {
             m_cursorVisible = !m_cursorVisible;
-            time = 0.0f;
+            m_blinkAccumulator = 0.0f;
         }
         if (m_cursorVisible) {
             float cursorX = textX + m_cursorPos * 8.0f;
@@ -73,13 +68,11 @@ void UITextField::render(UIRenderer* ui) {
     ui->pop_clip_rect();
 }
 
-// ---- Step 3: Mouse capture for drag selection ----
 bool UITextField::on_mouse_down(float x, float y, int button) {
     if (button != 0) return false;
     request_focus();
     m_dragging = true;
 
-    // Capture the mouse so we get move events even outside the field
     UIRoot* root = get_root();
     if (root) root->set_capture(this, true);
 
@@ -95,11 +88,8 @@ bool UITextField::on_mouse_down(float x, float y, int button) {
 bool UITextField::on_mouse_up(float x, float y, int button) {
     if (button != 0) return false;
     m_dragging = false;
-
-    // Release capture
     UIRoot* root = get_root();
     if (root) root->set_capture(this, false);
-
     return true;
 }
 
@@ -110,38 +100,32 @@ bool UITextField::on_mouse_move(float x, float y) {
         if (pos < 0) pos = 0;
         if (pos > (int)m_text.size()) pos = (int)m_text.size();
         m_cursorPos = pos;
-        m_selectionEnd = pos;   // extends selection
+        m_selectionEnd = pos;
         return true;
     }
     return false;
 }
 
-// ---- Keyboard input (unchanged) ----
 bool UITextField::on_key_down(int key, bool ctrl, bool shift) {
     if (!m_focused) return false;
 
-    // Ctrl+A: select all
     if (ctrl && key == 'A') {
         select_all();
         return true;
     }
-    // Ctrl+C: copy
     if (ctrl && key == 'C') {
         copy_to_clipboard();
         return true;
     }
-    // Ctrl+X: cut
     if (ctrl && key == 'X') {
         cut_to_clipboard();
         return true;
     }
-    // Ctrl+V: paste
     if (ctrl && key == 'V') {
         paste_from_clipboard();
         return true;
     }
 
-    // Enter / Escape
     if (key == VK_RETURN) {
         commit();
         return true;
@@ -151,7 +135,6 @@ bool UITextField::on_key_down(int key, bool ctrl, bool shift) {
         return true;
     }
 
-    // Backspace
     if (key == VK_BACK) {
         if (m_selectionStart != m_selectionEnd) {
             delete_selection();
@@ -163,7 +146,6 @@ bool UITextField::on_key_down(int key, bool ctrl, bool shift) {
         return true;
     }
 
-    // Delete key
     if (key == VK_DELETE) {
         if (m_selectionStart != m_selectionEnd) {
             delete_selection();
@@ -174,7 +156,6 @@ bool UITextField::on_key_down(int key, bool ctrl, bool shift) {
         return true;
     }
 
-    // Arrow keys
     if (key == VK_LEFT) {
         move_cursor(-1, shift);
         return true;
@@ -207,7 +188,6 @@ bool UITextField::on_char(char c) {
     return false;
 }
 
-// ---- Text manipulation (all unchanged) ----
 void UITextField::insert_char(char c) {
     m_text.insert(m_cursorPos, 1, c);
     m_cursorPos++;
@@ -287,7 +267,6 @@ void UITextField::replace_selection(const std::string& text) {
     m_selectionStart = m_selectionEnd = m_cursorPos;
 }
 
-// ---- Clipboard (unchanged) ----
 void UITextField::copy_to_clipboard() {
     int start, end;
     get_selection(start, end);
@@ -332,7 +311,6 @@ void UITextField::paste_from_clipboard() {
     CloseClipboard();
 }
 
-// ---- Commit / Cancel ----
 void UITextField::commit() {
     if (m_onCommit) {
         m_onCommit(m_text);
