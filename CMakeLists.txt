@@ -87,29 +87,26 @@ add_library(vark_game STATIC
 target_include_directories(vark_game PUBLIC src)
 target_link_libraries(vark_game PRIVATE vark_common)
 
-# ---- UI library (2D overlay, shared) ----
-add_library(vark_ui STATIC
-    src/ui/ui_renderer.cpp
-    src/ui/ui_widget.cpp
-    src/ui/ui_root.cpp
-    src/ui/ui_layout.cpp
-    src/ui/ui_splitter.cpp   # <-- ADD
-    src/ui/ui_list.cpp
-    src/ui/ui_text_field.cpp      # <-- ADD THIS
-    src/ui/ui_scrollbar.cpp      # <-- ADD THIS
-    src/ui/ui_scroll_container.cpp      # <-- ADD THIS
+# ---- ImGui library (replaces old vark_ui) ----
+add_library(vark_imgui STATIC
+    external/imgui/imgui.cpp
+    external/imgui/imgui_draw.cpp
+    external/imgui/imgui_widgets.cpp
+    external/imgui/imgui_tables.cpp
+    external/imgui/backends/imgui_impl_win32.cpp
+    external/imgui/backends/imgui_impl_dx11.cpp
 )
-target_compile_definitions(vark_ui PRIVATE NOMINMAX)
-target_include_directories(vark_ui PUBLIC
-    src/ui
-    src/common
+target_include_directories(vark_imgui PUBLIC
+    external/imgui
+    external/imgui/backends
 )
-target_link_libraries(vark_ui PRIVATE d3d11 d3dcompiler)
+target_compile_definitions(vark_imgui PRIVATE NOMINMAX _CRT_SECURE_NO_WARNINGS)
+target_link_libraries(vark_imgui PRIVATE d3d11 d3dcompiler)
 
-# ---- Editor library (editor logic, uses CSG) ----
+# ---- Editor library (editor logic, uses CSG and ImGui) ----
 add_library(vark_editor STATIC
     src/editor/editor.cpp
-    src/editor/editor_ui.cpp
+    src/editor/editor_ui.cpp          # <-- ADDED
     src/editor/editor_camera.cpp
     src/editor/editor_settings.cpp
 )
@@ -117,11 +114,12 @@ target_compile_definitions(vark_editor PRIVATE NOMINMAX)
 target_include_directories(vark_editor PUBLIC
     src/editor
     src
+    ${CMAKE_SOURCE_DIR}/external/imgui   # <-- ADDED to find imgui.h
 )
 target_link_libraries(vark_editor PRIVATE
     vark_common
-    vark_ui
     vark_csg
+    # vark_imgui is linked by the app, but editor needs its headers only
 )
 
 # ---- Engine executable (game) ----
@@ -129,14 +127,14 @@ add_executable(engine_app WIN32 src/apps/engine/main.cpp)
 target_include_directories(engine_app PRIVATE src)
 target_link_libraries(engine_app PRIVATE vark_common vark_game)
 
-# ---- Editor executable (standalone, no game) ----
+# ---- Editor executable (standalone, uses ImGui) ----
 add_executable(editor_app WIN32 src/apps/editor/editor_main.cpp)
 target_include_directories(editor_app PRIVATE src)
 target_link_libraries(editor_app PRIVATE
     vark_common
-    vark_ui
     vark_editor
     vark_csg
+    vark_imgui          # ImGui core + backends
 )
 
 # ---- Compiler executable (console tool) ----

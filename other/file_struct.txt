@@ -56,6 +56,4 @@ vark-engine/
 │   │   └── player/
 │   │       ├── player.cpp/h
 │   │       └── physics_profile.h
-│   └── ui/
-│       ├── ui_renderer.cpp/h
 └── .gitignore

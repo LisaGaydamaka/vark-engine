@@ -1,10 +1,11 @@
 // src/editor/editor.cpp
 #include "editor.h"
+#include "editor_ui.h"          // for EditField enum
 #include "core/logger.h"
 #include "core/geometry.h"
 #include "compiler/csg_solver.h"
 #include "world/vmis_io.h"
-#include "world/vmis_format.h" 
+#include "world/vmis_format.h"
 #include <d3d11.h>
 #include <algorithm>
 #include <unordered_map>
@@ -16,12 +17,11 @@
 Editor::Editor() {}
 Editor::~Editor() { shutdown(); }
 
-bool Editor::initialize(Renderer* renderer, Level* level, UIRenderer* ui) {
+bool Editor::initialize(Renderer* renderer, Level* level) {
     m_renderer = renderer;
     m_level = level;
-    m_ui = ui;
 
-    if (!m_renderer || !m_level || !m_ui) return false;
+    if (!m_renderer || !m_level) return false;
 
     ID3D11Device* device = (ID3D11Device*)m_renderer->get_device();
     if (!device) {
@@ -39,9 +39,6 @@ bool Editor::initialize(Renderer* renderer, Level* level, UIRenderer* ui) {
         LOG_WARN("Editor: could not create wireframe buffer");
     }
 
-    // Create UI handler
-    m_uiHandler = std::make_unique<EditorUI>(this, m_ui);
-
     m_initialized = true;
     LOG_INFO("Editor initialized.");
     return true;
@@ -49,7 +46,6 @@ bool Editor::initialize(Renderer* renderer, Level* level, UIRenderer* ui) {
 
 void Editor::shutdown() {
     m_wireframeBuffer.Reset();
-    m_uiHandler.reset();
     m_initialized = false;
 }
 
@@ -58,23 +54,12 @@ void Editor::sync_brushes() {
     if (m_selectedIndex >= (int)m_brushes.size()) {
         m_selectedIndex = -1;
     }
-    if (m_uiHandler) {
-        m_uiHandler->set_brushes(m_brushes);
-        m_uiHandler->set_selected(m_selectedIndex);
-    }
 }
 
 void Editor::update(float dt) {
     (void)dt;
 }
 
-void Editor::set_keybinds(const EditorKeybindSettings& keybinds) {
-    m_keybinds = keybinds;
-}
-
-// ---------------------------------------------------------------------
-// Render
-// ---------------------------------------------------------------------
 void Editor::render() {
     if (!m_initialized) return;
 
@@ -83,16 +68,8 @@ void Editor::render() {
     if (m_wireframeBuffer && m_wireframeVertexCount > 0) {
         m_renderer->draw_lines(m_wireframeBuffer.Get(), m_wireframeVertexCount);
     }
-
-    // 2D UI
-    if (m_uiHandler) {
-        m_uiHandler->render();
-    }
 }
 
-// ---------------------------------------------------------------------
-// Wireframe buffer rebuild
-// ---------------------------------------------------------------------
 void Editor::rebuild_wireframe_buffer() {
     if (!m_wireframeBuffer) return;
 
@@ -128,9 +105,6 @@ void Editor::rebuild_wireframe_buffer() {
     m_wireframeVertexCount = (int)lineVerts.size();
 }
 
-// ---------------------------------------------------------------------
-// 3D Pick
-// ---------------------------------------------------------------------
 int Editor::pick_brush(int mouseX, int mouseY) {
     if (!m_initialized || m_brushes.empty()) return -1;
 
@@ -158,19 +132,19 @@ int Editor::pick_brush(int mouseX, int mouseY) {
 }
 
 Vec3 Editor::screen_to_world_ray(int mouseX, int mouseY) {
-    int width = m_ui->get_width();
-    int height = m_ui->get_height();
+    // Use renderer's actual width/height
+    int width = m_renderer ? m_renderer->get_width() : 1280;
+    int height = m_renderer ? m_renderer->get_height() : 720;
     if (width == 0 || height == 0) return {0,0,0};
 
     float ndcX = (2.0f * mouseX / width) - 1.0f;
     float ndcY = 1.0f - (2.0f * mouseY / height);
 
-    Camera* cam = m_editorCamera.get_camera(); // now returns Camera* (non-const)
+    Camera* cam = m_editorCamera.get_camera();
     Mat4 view = cam->get_view_matrix();
     float aspect = (float)width / (float)height;
     Mat4 proj = mat4_perspective(60.0f * 3.14159265f / 180.0f, aspect, 0.1f, 1000.0f);
 
-    // Simple ray from camera position through NDC point
     Vec3 forward = cam->get_forward();
     Vec3 right = cam->get_right();
     Vec3 up = cam->get_up();
@@ -202,9 +176,6 @@ bool Editor::intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir, const Vec
     return true;
 }
 
-// ---------------------------------------------------------------------
-// Commands
-// ---------------------------------------------------------------------
 void Editor::save_level() {
     if (m_brushes.empty()) {
         LOG_WARN("No brushes to save.");
@@ -302,10 +273,6 @@ void Editor::delete_selected() {
     if (m_selectedIndex < 0 || m_selectedIndex >= (int)m_brushes.size()) return;
     m_brushes.erase(m_brushes.begin() + m_selectedIndex);
     m_selectedIndex = -1;
-    if (m_uiHandler) {
-        m_uiHandler->set_brushes(m_brushes);
-        m_uiHandler->set_selected(m_selectedIndex);
-    }
 }
 
 void Editor::add_brush(BrushType type, ShapeType shape) {
@@ -317,10 +284,6 @@ void Editor::add_brush(BrushType type, ShapeType shape) {
     for (auto& f : b.faces) f = FaceTexture();
     m_brushes.push_back(b);
     m_selectedIndex = (int)m_brushes.size() - 1;
-    if (m_uiHandler) {
-        m_uiHandler->set_brushes(m_brushes);
-        m_uiHandler->set_selected(m_selectedIndex);
-    }
 }
 
 void Editor::select_brush(int index) {
@@ -329,43 +292,28 @@ void Editor::select_brush(int index) {
     } else {
         m_selectedIndex = -1;
     }
-    if (m_uiHandler) {
-        m_uiHandler->set_selected(m_selectedIndex);
-    }
 }
 
-// ---------------------------------------------------------------------
-// Edit callbacks from UI
-// ---------------------------------------------------------------------
 void Editor::apply_brush_edit(int field, float value) {
     if (m_selectedIndex < 0 || m_selectedIndex >= (int)m_brushes.size()) return;
     auto& b = m_brushes[m_selectedIndex];
-    switch ((EditorUI::EditField)field) {
-        case EditorUI::EditField::PosX: b.center.x = value; break;
-        case EditorUI::EditField::PosY: b.center.y = value; break;
-        case EditorUI::EditField::PosZ: b.center.z = value; break;
-        case EditorUI::EditField::SizeX: b.size.x = std::max(value, 0.1f); break;
-        case EditorUI::EditField::SizeY: b.size.y = std::max(value, 0.1f); break;
-        case EditorUI::EditField::SizeZ: b.size.z = std::max(value, 0.1f); break;
+    switch ((EditField)field) {
+        case EditField::PosX: b.center.x = value; break;
+        case EditField::PosY: b.center.y = value; break;
+        case EditField::PosZ: b.center.z = value; break;
+        case EditField::SizeX: b.size.x = std::max(value, 0.1f); break;
+        case EditField::SizeY: b.size.y = std::max(value, 0.1f); break;
+        case EditField::SizeZ: b.size.z = std::max(value, 0.1f); break;
         default: break;
     }
-    // Not saved yet; user must Ctrl+S to persist.
 }
 
-void Editor::cancel_brush_edit() {
-    // UI will reset its edit state.
-}
-
-// ---------------------------------------------------------------------
-// Input handling
-// ---------------------------------------------------------------------
 void Editor::on_mouse_move(int dx, int dy, bool leftDown, bool middleDown, bool rightDown, int modMask) {
-    // Determine which button is down
     MouseButton downButton = MouseButton::None;
     if (leftDown) downButton = MouseButton::Left;
     else if (middleDown) downButton = MouseButton::Middle;
     else if (rightDown) downButton = MouseButton::Right;
-    else return; // no button
+    else return;
 
     if (downButton == m_keybinds.orbitButton && (modMask & 0x7) == m_keybinds.orbitModifier) {
         m_editorCamera.orbit((float)dx, (float)dy);
@@ -382,23 +330,16 @@ void Editor::on_mouse_wheel(int delta) {
 }
 
 void Editor::on_key_down(int key, bool ctrl, bool shift) {
-    // Save
     if (key == m_keybinds.saveKey && ctrl == m_keybinds.saveCtrl && shift == m_keybinds.saveShift) {
         save_level();
         return;
     }
-    // Delete
     if (key == m_keybinds.deleteKey && ctrl == m_keybinds.deleteCtrl && shift == m_keybinds.deleteShift) {
         delete_selected();
         return;
     }
 }
 
-void Editor::on_key_up(int key) {
-    // Not needed
-}
-
-void Editor::on_mouse_button(int button, bool pressed) {
-    (void)button; (void)pressed;
-    // Not used; we rely on the flags passed to on_mouse_move.
+void Editor::set_keybinds(const EditorKeybindSettings& keybinds) {
+    m_keybinds = keybinds;
 }

@@ -1,7 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <d3d11.h>
-#include <wrl/client.h>        // NEW
+#include <wrl/client.h>
 #include "../core/math.h"
 
 using Microsoft::WRL::ComPtr;
@@ -18,21 +18,22 @@ public:
     void draw_vertices(ID3D11Buffer* vertexBuffer, int vertexCount, D3D11_PRIMITIVE_TOPOLOGY topology);
     void draw_lines(ID3D11Buffer* vertexBuffer, int vertexCount);
 
-    // ---- Texture loading and switching ----
     void* load_texture(const char* filename);
     void set_texture(void* textureView);
 
-    // ---- Get device/context as void* for compatibility ----
-    void* get_device() const { return device.Get(); }     // changed
-    void* get_context() const { return context.Get(); }   // changed
+    void* get_device() const { return device.Get(); }
+    void* get_context() const { return context.Get(); }
     
+    // --- NEW getters ---
+    int get_width() const { return m_width; }
+    int get_height() const { return m_height; }
+
     void apply_pipeline();
     void apply_font_pipeline();
     void resize(int width, int height);
     bool is_device_lost() const { return m_deviceLost; }
 
 private:
-    // ---- Use ComPtr for all D3D resources ----
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context;
     ComPtr<IDXGISwapChain> swapChain;
@@ -54,7 +55,6 @@ private:
     int m_height = 600;
     bool m_deviceLost = false;
 
-    // ---- Font pipeline ----
     ComPtr<ID3D11VertexShader> fontVertexShader;
     ComPtr<ID3D11PixelShader> fontPixelShader;
     ComPtr<ID3D11InputLayout> fontInputLayout;
@@ -63,10 +63,8 @@ private:
     ComPtr<ID3D11Buffer> fontConstantBuffer;
     ComPtr<ID3D11BlendState> fontBlendState;
 
-    // ---- Default fallback texture ----
     ComPtr<ID3D11ShaderResourceView> m_defaultTextureView;
 
-    // ---- Line pipeline ----
     ComPtr<ID3D11PixelShader> linePixelShader;
     ComPtr<ID3D11VertexShader> lineVertexShader;
     ComPtr<ID3D11InputLayout> lineInputLayout;
