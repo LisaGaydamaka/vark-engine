@@ -26,30 +26,21 @@ public:
     void select_brush(int index);
     int pick_brush(int mouseX, int mouseY);
 
-    // ---- Name editing ----
     void set_brush_name(int index, const std::string& name);
-
-    // ---- Time editing with reordering ----
     void set_brush_time(int index, int newTime);
-
-    // ---- Normalize times to 0..N-1 ----
     void renumber_times();
 
-    // Camera access
     Camera* get_camera() { return m_editorCamera.get_camera(); }
     const Camera* get_camera() const { return m_editorCamera.get_camera(); }
 
-    // Settings
     void set_keybinds(const EditorKeybindSettings& keybinds);
 
-    // Data access for UI
     const std::vector<Brush>& get_brushes() const { return m_brushes; }
     int get_selected_index() const { return m_selectedIndex; }
 
-    // Edit callbacks from UI
     void apply_brush_edit(int field, float value);
 
-    // Input events (still used for camera)
+    // Input events
     void on_mouse_move(int dx, int dy, bool leftDown, bool middleDown, bool rightDown, int modMask);
     void on_mouse_wheel(int delta);
     void on_key_down(int key, bool ctrl, bool shift);
@@ -57,7 +48,8 @@ public:
 private:
     void rebuild_wireframe_buffer();
     Vec3 screen_to_world_ray(int mouseX, int mouseY);
-    bool intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir, const Vec3& boxMin, const Vec3& boxMax, float& outT) const;
+    bool intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir,
+                        const Vec3& boxMin, const Vec3& boxMax, float& outT) const;
 
     Renderer* m_renderer = nullptr;
     Level* m_level = nullptr;
@@ -70,6 +62,13 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_wireframeBuffer;
     int m_wireframeVertexCount = 0;
+
+    // ---- Debug ray ----
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_debugRayBuffer;
+    int m_debugRayVertexCount = 0;
+    Vec3 m_debugRayOrigin;
+    Vec3 m_debugRayDir;
+    bool m_debugRayValid = false;
 
     bool m_initialized = false;
 };

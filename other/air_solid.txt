@@ -1,0 +1,24 @@
+In DromEd, the level editor for the Thief games, "Air" and "Solid" brushes are the fundamental building blocks for creating the 3D game world. They work on a principle of constructive solid geometry (CSG).
+
+Think of it like sculpting: you start with a block of solid material (the "void") and use "Air" brushes to carve out the empty spaces where the player can walk, while "Solid" brushes are used to fill in areas to create walls, floors, and other structures.
+
+Here’s a breakdown of how they work:
+
+➡️ Air Brushes: Carving Out the World
+The "Fill Air" Brush: This is your primary tool for defining playable space. When you create an "Air" brush (by setting its operation to Fill Air), you are telling DromEd to carve that shape out of the surrounding solid void.
+
+The Starting Point: A fundamental rule is that the player's starting point must be located inside an Air brush. If you place the player start in a solid area, the game will load to a black screen and the player will fall indefinitely.
+
+⬛ Solid Brushes: Building Structures
+The "Fill Solid" Brush: This brush does the opposite of an Air brush. When placed inside an existing Air brush, it fills that space back in, effectively creating a solid object like a pillar, a wall, or a floor.
+
+A Common Mistake: A frequent error for new DromEd users is accidentally setting the main "Fill Air" brush to "Solid" before creating a new brush. This fills the entire level with solid, trapping the player.
+
+⚙️ The Secret Sauce: Order and Timing (The "Time" Value)
+For Air and Solid brushes to work together correctly, DromEd needs to know the order in which to process them. This is handled by a property called "Time".
+
+Processing Order: Each brush has a "Time" value. Brushes with a higher number are processed after those with a lower number.
+
+The "To End" Button: You can use the "To End" button in the DromEd window to give a brush the highest possible Time value, ensuring it's processed last.
+
+Example: To create a pillar in a room, you must first create the large Air brush (Time 0). Then, you create the smaller Solid brush for the pillar (Time 1). Because the Solid brush has a higher Time value, DromEd carves out the room first and then fills in the pillar, resulting in a solid column standing in an empty room. If you got the order wrong, the pillar would be carved out of the void first, and then the room would be carved out around it, which wouldn't work.

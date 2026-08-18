@@ -39,6 +39,21 @@ bool Editor::initialize(Renderer* renderer, Level* level) {
         LOG_WARN("Editor: could not create wireframe buffer");
     }
 
+    // Create debug ray buffer (2 vertices for a line)
+    D3D11_BUFFER_DESC rayBd = {};
+    rayBd.Usage = D3D11_USAGE_DYNAMIC;
+    rayBd.ByteWidth = 2 * sizeof(Vertex);
+    rayBd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    rayBd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    if (FAILED(device->CreateBuffer(&rayBd, nullptr, m_debugRayBuffer.GetAddressOf()))) {
+        LOG_WARN("Editor: could not create debug ray buffer");
+    }
+
+    // Set default camera orbit and update once
+    m_editorCamera.set_target({0, 0, 0});
+    m_editorCamera.set_distance(20.0f);
+    m_editorCamera.update();
+
     m_initialized = true;
     LOG_INFO("Editor initialized.");
     return true;
@@ -46,12 +61,13 @@ bool Editor::initialize(Renderer* renderer, Level* level) {
 
 void Editor::shutdown() {
     m_wireframeBuffer.Reset();
+    m_debugRayBuffer.Reset();
     m_initialized = false;
 }
 
 void Editor::sync_brushes() {
     m_brushes = m_level->get_brushes();
-    renumber_times();   // Normalize times after load
+    renumber_times();
     if (m_selectedIndex >= (int)m_brushes.size()) {
         m_selectedIndex = -1;
     }
@@ -67,6 +83,24 @@ void Editor::render() {
     rebuild_wireframe_buffer();
     if (m_wireframeBuffer && m_wireframeVertexCount > 0) {
         m_renderer->draw_lines(m_wireframeBuffer.Get(), m_wireframeVertexCount);
+    }
+
+    // ---- Draw debug ray ----
+    if (m_debugRayValid && m_debugRayBuffer && m_renderer) {
+        ID3D11DeviceContext* ctx = (ID3D11DeviceContext*)m_renderer->get_context();
+        if (ctx) {
+            D3D11_MAPPED_SUBRESOURCE mapped;
+            HRESULT hr = ctx->Map(m_debugRayBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+            if (SUCCEEDED(hr)) {
+                Vertex* verts = (Vertex*)mapped.pData;
+                Vec3 end = m_debugRayOrigin + m_debugRayDir * 100.0f; // 100 units length
+                verts[0] = {m_debugRayOrigin.x, m_debugRayOrigin.y, m_debugRayOrigin.z, 0,0, 1,0,0}; // red
+                verts[1] = {end.x, end.y, end.z, 0,0, 1,0,0};
+                ctx->Unmap(m_debugRayBuffer.Get(), 0);
+                m_debugRayVertexCount = 2;
+                m_renderer->draw_lines(m_debugRayBuffer.Get(), m_debugRayVertexCount);
+            }
+        }
     }
 }
 
@@ -105,28 +139,106 @@ void Editor::rebuild_wireframe_buffer() {
     m_wireframeVertexCount = (int)lineVerts.size();
 }
 
+// ---- Möller–Trumbore ray-triangle intersection ----
+static bool intersect_triangle(const Vec3& orig, const Vec3& dir,
+                               const Vec3& v0, const Vec3& v1, const Vec3& v2,
+                               float& t, float& u, float& v) {
+    const float EPSILON = 0.000001f;
+    Vec3 edge1 = v1 - v0;
+    Vec3 edge2 = v2 - v0;
+    Vec3 h = Vec3::cross(dir, edge2);
+    float a = Vec3::dot(edge1, h);
+    if (a > -EPSILON && a < EPSILON)
+        return false;
+    float f = 1.0f / a;
+    Vec3 s = orig - v0;
+    u = f * Vec3::dot(s, h);
+    if (u < 0.0f || u > 1.0f)
+        return false;
+    Vec3 q = Vec3::cross(s, edge1);
+    v = f * Vec3::dot(dir, q);
+    if (v < 0.0f || u + v > 1.0f)
+        return false;
+    t = f * Vec3::dot(edge2, q);
+    return (t > EPSILON);
+}
+
 int Editor::pick_brush(int mouseX, int mouseY) {
     if (!m_initialized || m_brushes.empty()) return -1;
 
     Vec3 rayOrigin = m_editorCamera.get_camera()->get_position();
     Vec3 rayDir = screen_to_world_ray(mouseX, mouseY);
+    rayDir = rayDir.normalized();
 
+    // Store for debug ray
+    m_debugRayOrigin = rayOrigin;
+    m_debugRayDir = rayDir;
+    m_debugRayValid = true;
+
+    LOG_INFO("Picking at (%d,%d): origin=(%.3f,%.3f,%.3f) dir=(%.3f,%.3f,%.3f)",
+             mouseX, mouseY, rayOrigin.x, rayOrigin.y, rayOrigin.z,
+             rayDir.x, rayDir.y, rayDir.z);
+
+    float bestDist = FLT_MAX;
     int bestIdx = -1;
-    float bestT = FLT_MAX;
+    Vec3 viewDir = rayDir; // camera ray direction
+    int totalTrianglesTested = 0;
+    int totalTrianglesHit = 0;
 
-    for (size_t i = 0; i < m_brushes.size(); ++i) {
-        const auto& b = m_brushes[i];
-        Vec3 half = b.size * 0.5f;
-        Vec3 min = b.center - half;
-        Vec3 max = b.center + half;
+    for (size_t bi = 0; bi < m_brushes.size(); ++bi) {
+        const Brush& brush = m_brushes[bi];
 
-        float t;
-        if (intersect_aabb(rayOrigin, rayDir, min, max, t)) {
-            if (t < bestT) {
-                bestT = t;
-                bestIdx = (int)i;
+        // Generate mesh for this brush (no labels)
+        MeshData mesh, dummy;
+        if (brush.shape == ShapeType::Box) {
+            generate_box(brush.center, brush.size, {1,1,1},
+                         brush.faces.data(), false, mesh, dummy, false);
+        } else {
+            generate_wedge(brush.center, brush.size, {1,1,1},
+                           brush.faces.data(), false, mesh, dummy, false);
+        }
+
+        if (mesh.vertices.empty() || mesh.indices.empty())
+            continue;
+
+        int triCount = (int)mesh.indices.size() / 3;
+        totalTrianglesTested += triCount;
+
+        // Iterate over triangles
+        for (size_t i = 0; i < mesh.indices.size(); i += 3) {
+            const Vertex& v0 = mesh.vertices[mesh.indices[i+0]];
+            const Vertex& v1 = mesh.vertices[mesh.indices[i+1]];
+            const Vertex& v2 = mesh.vertices[mesh.indices[i+2]];
+
+            Vec3 p0 = {v0.x, v0.y, v0.z};
+            Vec3 p1 = {v1.x, v1.y, v1.z};
+            Vec3 p2 = {v2.x, v2.y, v2.z};
+
+            // Compute triangle normal (pointing outward)
+            Vec3 e1 = p1 - p0;
+            Vec3 e2 = p2 - p0;
+            Vec3 normal = Vec3::cross(e1, e2).normalized();
+
+            // Skip back‑facing triangles (normal points away from camera)
+            if (Vec3::dot(normal, viewDir) >= 0.0f)
+                continue;
+
+            float t, u, v;
+            if (intersect_triangle(rayOrigin, rayDir, p0, p1, p2, t, u, v)) {
+                totalTrianglesHit++;
+                if (t < bestDist) {
+                    bestDist = t;
+                    bestIdx = (int)bi;
+                }
             }
         }
+    }
+
+    LOG_INFO("Total triangles tested: %d, front-facing hit: %d", totalTrianglesTested, totalTrianglesHit);
+    if (bestIdx >= 0) {
+        LOG_INFO("Selected brush %d at distance %.3f", bestIdx, bestDist);
+    } else {
+        LOG_INFO("No brush selected");
     }
     return bestIdx;
 }
@@ -134,25 +246,42 @@ int Editor::pick_brush(int mouseX, int mouseY) {
 Vec3 Editor::screen_to_world_ray(int mouseX, int mouseY) {
     int width = m_renderer ? m_renderer->get_width() : 1280;
     int height = m_renderer ? m_renderer->get_height() : 720;
-    if (width == 0 || height == 0) return {0,0,0};
+    if (width == 0 || height == 0) return {0, 0, 0};
 
     float ndcX = (2.0f * mouseX / width) - 1.0f;
     float ndcY = 1.0f - (2.0f * mouseY / height);
 
     Camera* cam = m_editorCamera.get_camera();
-    Mat4 view = cam->get_view_matrix();
-    float aspect = (float)width / (float)height;
-    Mat4 proj = mat4_perspective(60.0f * 3.14159265f / 180.0f, aspect, 0.1f, 1000.0f);
+    Vec3 camPos = cam->get_position();
+    Vec3 target = m_editorCamera.get_target();
 
-    Vec3 forward = cam->get_forward();
-    Vec3 right = cam->get_right();
-    Vec3 up = cam->get_up();
-    Vec3 dir = forward + right * ndcX + up * ndcY;
+    // Use the actual look direction from camera to target
+    Vec3 forward = (target - camPos).normalized();
+
+    // Compute right and up vectors from this forward direction
+    Vec3 worldUp = {0.0f, 1.0f, 0.0f};
+    Vec3 right = Vec3::cross(worldUp, forward).normalized();
+    Vec3 up = Vec3::cross(forward, right).normalized();
+
+    const float fovRad = 60.0f * 3.14159265f / 180.0f;
+    float tanHalfFov = tanf(fovRad * 0.5f);
+    float aspect = (float)width / (float)height;
+
+    Vec3 dir = forward + right * (ndcX * tanHalfFov * aspect) + up * (ndcY * tanHalfFov);
     dir = dir.normalized();
+
+    LOG_INFO("screen_to_world_ray: mouse(%d,%d) -> ndc(%.3f,%.3f), dir=(%.3f,%.3f,%.3f)",
+             mouseX, mouseY, ndcX, ndcY, dir.x, dir.y, dir.z);
+    LOG_INFO("  camera pos=(%.3f,%.3f,%.3f), target=(%.3f,%.3f,%.3f), forward=(%.3f,%.3f,%.3f)",
+             camPos.x, camPos.y, camPos.z,
+             target.x, target.y, target.z,
+             forward.x, forward.y, forward.z);
+
     return dir;
 }
 
-bool Editor::intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir, const Vec3& boxMin, const Vec3& boxMax, float& outT) const {
+bool Editor::intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir,
+                            const Vec3& boxMin, const Vec3& boxMax, float& outT) const {
     float tMin = -FLT_MAX, tMax = FLT_MAX;
     for (int i = 0; i < 3; ++i) {
         float origin = (i == 0) ? rayOrigin.x : (i == 1) ? rayOrigin.y : rayOrigin.z;
@@ -175,7 +304,6 @@ bool Editor::intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir, const Vec
     return true;
 }
 
-// ---- Renumber times to 0..N-1 (sorts by current time) ----
 void Editor::renumber_times() {
     if (m_brushes.empty()) return;
     std::sort(m_brushes.begin(), m_brushes.end(),
@@ -187,29 +315,26 @@ void Editor::renumber_times() {
     }
 }
 
-// ---- Set brush name ----
 void Editor::set_brush_name(int index, const std::string& name) {
     if (index < 0 || index >= (int)m_brushes.size()) return;
     m_brushes[index].name = name;
 }
 
-// ---- Set brush time with reordering and conflict resolution ----
 void Editor::set_brush_time(int index, int newTime) {
     if (index < 0 || index >= (int)m_brushes.size()) return;
     int N = (int)m_brushes.size();
     int target = newTime;
     if (target < 0) target = 0;
     if (target >= N) target = N - 1;
-    if (index == target) return; // already at that time (not strictly needed, but fine)
+    if (index == target) return;
 
     Brush movedBrush = m_brushes[index];
     m_brushes.erase(m_brushes.begin() + index);
 
-    // Insert at the *exact* final desired position (target)
-    // No adjustment needed because we want the brush to end up at time 'target'
+    // Insert at the exact desired position (target)
     m_brushes.insert(m_brushes.begin() + target, movedBrush);
 
-    // Renumber all brushes sequentially (0..N-1)
+    // Renumber all brushes sequentially
     for (int i = 0; i < (int)m_brushes.size(); ++i) {
         m_brushes[i].time = i;
     }
@@ -223,10 +348,8 @@ void Editor::save_level() {
         return;
     }
 
-    // Ensure times are sequential before saving
     renumber_times();
 
-    // Build material table (VMISMaterial) and indices
     std::vector<VMISMaterial> materials;
     std::unordered_map<std::string, int> texToIndex;
     std::vector<int> materialIndices;
@@ -255,11 +378,9 @@ void Editor::save_level() {
         materialIndices.push_back(matIdx);
     }
 
-    // Run CSG with VMISMaterial
     std::vector<CSGPoly> polys = compile_csg(m_brushes, materialIndices, materials);
     LOG_INFO("CSG produced %zu polygons", polys.size());
 
-    // Convert to Vertex + indices
     std::vector<Vertex> bakedVerts;
     std::vector<uint32_t> bakedIndices;
     bakedVerts.reserve(polys.size() * 3);
@@ -286,7 +407,6 @@ void Editor::save_level() {
         }
     }
 
-    // Physics triangles
     std::vector<Triangle> physTris;
     physTris.reserve(bakedIndices.size() / 3);
     for (size_t i = 0; i < bakedIndices.size(); i += 3) {
@@ -297,7 +417,6 @@ void Editor::save_level() {
         physTris.push_back(tri);
     }
 
-    // Write VMIS using the already built materials
     const char* levelPath = m_level->get_level_path();
     if (!levelPath || !levelPath[0]) {
         LOG_ERROR("No level path set; cannot save.");
@@ -326,15 +445,10 @@ void Editor::add_brush(BrushType type, ShapeType shape) {
     b.center = {0,0,0};
     b.size = {4,4,4};
     for (auto& f : b.faces) f = FaceTexture();
-
-    // Set time to next available index
     b.time = (int)m_brushes.size();
-
-    // Set name based on type and shape
     std::string typeStr = (type == BrushType::Add) ? "Add" : "Sub";
     std::string shapeStr = (shape == ShapeType::Box) ? "Box" : "Wedge";
     b.name = typeStr + " " + shapeStr;
-
     m_brushes.push_back(b);
     m_selectedIndex = (int)m_brushes.size() - 1;
 }
