@@ -82,6 +82,7 @@ void Editor::sync_brushes() {
     if (m_selectedIndex >= (int)m_brushes.size()) {
         m_selectedIndex = -1;
     }
+    reset_pick_cycle();
 }
 
 void Editor::update(float dt) {
@@ -200,60 +201,88 @@ static bool intersect_triangle(const Vec3& orig, const Vec3& dir,
 int Editor::pick_brush(int mouseX, int mouseY) {
     if (!m_initialized || m_brushes.empty()) return -1;
 
-    Vec3 rayOrigin = m_editorCamera.get_camera()->get_position();
-    Vec3 rayDir = screen_to_world_ray(mouseX, mouseY);
-    rayDir = rayDir.normalized();
+    bool sameSpot = (abs(mouseX - m_lastPickX) <= 2 && abs(mouseY - m_lastPickY) <= 2);
 
-    float bestDist = FLT_MAX;
-    int bestIdx = -1;
-    Vec3 viewDir = rayDir;
+    if (!sameSpot) {
+        Vec3 rayOrigin = m_editorCamera.get_camera()->get_position();
+        Vec3 rayDir = screen_to_world_ray(mouseX, mouseY);
+        rayDir = rayDir.normalized();
 
-    for (size_t bi = 0; bi < m_brushes.size(); ++bi) {
-        const Brush& brush = m_brushes[bi];
-        bool isSub = (brush.type == BrushType::Sub);
+        struct HitInfo { int brushIdx; float dist; };
+        std::vector<HitInfo> hits;
+        Vec3 viewDir = rayDir;
 
-        MeshData mesh, dummy;
-        if (brush.shape == ShapeType::Box) {
-            generate_box(brush.center, brush.size, {1,1,1},
-                         brush.faces.data(), false, mesh, dummy, false);
-        } else {
-            generate_wedge(brush.center, brush.size, {1,1,1},
-                           brush.faces.data(), false, mesh, dummy, false);
-        }
+        for (size_t bi = 0; bi < m_brushes.size(); ++bi) {
+            const Brush& brush = m_brushes[bi];
+            bool isSub = (brush.type == BrushType::Sub);
 
-        if (mesh.vertices.empty() || mesh.indices.empty())
-            continue;
+            MeshData mesh, dummy;
+            if (brush.shape == ShapeType::Box) {
+                generate_box(brush.center, brush.size, {1,1,1},
+                             brush.faces.data(), false, mesh, dummy, false);
+            } else {
+                generate_wedge(brush.center, brush.size, {1,1,1},
+                               brush.faces.data(), false, mesh, dummy, false);
+            }
 
-        for (size_t i = 0; i < mesh.indices.size(); i += 3) {
-            const Vertex& v0 = mesh.vertices[mesh.indices[i + 0]];
-            const Vertex& v1 = mesh.vertices[mesh.indices[i + 1]];
-            const Vertex& v2 = mesh.vertices[mesh.indices[i + 2]];
+            if (mesh.vertices.empty() || mesh.indices.empty()) continue;
 
-            Vec3 p0 = {v0.x, v0.y, v0.z};
-            Vec3 p1 = {v1.x, v1.y, v1.z};
-            Vec3 p2 = {v2.x, v2.y, v2.z};
+            float closestForBrush = FLT_MAX;
+            bool hit = false;
 
-            Vec3 e1 = p1 - p0;
-            Vec3 e2 = p2 - p0;
-            Vec3 normal = Vec3::cross(e1, e2).normalized();
-            float dotNormView = Vec3::dot(normal, viewDir);
+            for (size_t i = 0; i < mesh.indices.size(); i += 3) {
+                const Vertex& v0 = mesh.vertices[mesh.indices[i + 0]];
+                const Vertex& v1 = mesh.vertices[mesh.indices[i + 1]];
+                const Vertex& v2 = mesh.vertices[mesh.indices[i + 2]];
 
-            float t, u, v;
-            if (!intersect_triangle(rayOrigin, rayDir, p0, p1, p2, t, u, v))
-                continue;
+                Vec3 p0 = {v0.x, v0.y, v0.z};
+                Vec3 p1 = {v1.x, v1.y, v1.z};
+                Vec3 p2 = {v2.x, v2.y, v2.z};
 
-            bool isVisible = isSub ? (dotNormView >= 0.0f) : (dotNormView < 0.0f);
-            if (isVisible && t < bestDist) {
-                bestDist = t;
-                bestIdx = (int)bi;
+                Vec3 e1 = p1 - p0;
+                Vec3 e2 = p2 - p0;
+                Vec3 normal = Vec3::cross(e1, e2).normalized();
+                float dotNormView = Vec3::dot(normal, viewDir);
+
+                float t, u, v;
+                if (!intersect_triangle(rayOrigin, rayDir, p0, p1, p2, t, u, v))
+                    continue;
+
+                bool isVisible = isSub ? (dotNormView >= 0.0f) : (dotNormView < 0.0f);
+                if (isVisible && t < closestForBrush) {
+                    closestForBrush = t;
+                    hit = true;
+                }
+            }
+
+            if (hit) {
+                hits.push_back({(int)bi, closestForBrush});
             }
         }
+
+        std::sort(hits.begin(), hits.end(),
+                  [](const HitInfo& a, const HitInfo& b) { return a.dist < b.dist; });
+
+        m_pickCandidates.clear();
+        m_pickCandidates.reserve(hits.size());
+        for (const auto& h : hits) {
+            m_pickCandidates.push_back(h.brushIdx);
+        }
+
+        m_lastPickX = mouseX;
+        m_lastPickY = mouseY;
+        m_pickIndex = 0;
+
+        if (m_pickCandidates.empty()) {
+            return -1;
+        }
     }
 
-    if (bestIdx >= 0) {
-        LOG_INFO("Selected brush %d at distance %.3f", bestIdx, bestDist);
-    }
-    return bestIdx;
+    int selectedIdx = m_pickCandidates[m_pickIndex % m_pickCandidates.size()];
+    m_pickIndex = (m_pickIndex + 1) % m_pickCandidates.size();
+
+    LOG_INFO("Selected brush %d (cycle %d of %zu)", selectedIdx, m_pickIndex, m_pickCandidates.size());
+    return selectedIdx;
 }
 
 Vec3 Editor::screen_to_world_ray(int mouseX, int mouseY) {
@@ -336,6 +365,7 @@ void Editor::set_brush_time(int index, int newTime) {
         m_brushes[i].time = i;
     }
     m_selectedIndex = target;
+    reset_pick_cycle();   // <-- added
 }
 
 void Editor::save_level() {
@@ -432,6 +462,7 @@ void Editor::delete_selected() {
     if (m_selectedIndex < 0 || m_selectedIndex >= (int)m_brushes.size()) return;
     m_brushes.erase(m_brushes.begin() + m_selectedIndex);
     m_selectedIndex = -1;
+    reset_pick_cycle();   // <-- added
 }
 
 void Editor::add_brush(BrushType type, ShapeType shape) {
@@ -447,6 +478,7 @@ void Editor::add_brush(BrushType type, ShapeType shape) {
     b.name = typeStr + " " + shapeStr;
     m_brushes.push_back(b);
     m_selectedIndex = (int)m_brushes.size() - 1;
+    reset_pick_cycle();   // <-- added
 }
 
 void Editor::select_brush(int index) {

@@ -45,6 +45,9 @@ public:
     void on_mouse_wheel(int delta);
     void on_key_down(int key, bool ctrl, bool shift);
 
+    // Reset pick cycle (call when selection changes externally)
+    void reset_pick_cycle() { m_pickCandidates.clear(); m_pickIndex = 0; m_lastPickX = -1; m_lastPickY = -1; }
+
 private:
     void rebuild_wireframe_buffer();
     Vec3 screen_to_world_ray(int mouseX, int mouseY);
@@ -66,12 +69,18 @@ private:
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_selectedWireframeBuffer;
     int m_selectedWireframeVertexCount = 0;
 
-    // ---- Debug ray (optional, keep if you want) ----
+    // Debug ray (optional)
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_debugRayBuffer;
     int m_debugRayVertexCount = 0;
     Vec3 m_debugRayOrigin;
     Vec3 m_debugRayDir;
     bool m_debugRayValid = false;
+
+    // Pick cycle state
+    int m_lastPickX = -1;
+    int m_lastPickY = -1;
+    std::vector<int> m_pickCandidates;
+    int m_pickIndex = 0;
 
     bool m_initialized = false;
 };
