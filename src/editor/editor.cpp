@@ -170,7 +170,6 @@ int Editor::pick_brush(int mouseX, int mouseY) {
     Vec3 rayDir = screen_to_world_ray(mouseX, mouseY);
     rayDir = rayDir.normalized();
 
-    // Store for debug ray
     m_debugRayOrigin = rayOrigin;
     m_debugRayDir = rayDir;
     m_debugRayValid = true;
@@ -181,14 +180,12 @@ int Editor::pick_brush(int mouseX, int mouseY) {
 
     float bestDist = FLT_MAX;
     int bestIdx = -1;
-    Vec3 viewDir = rayDir; // camera ray direction
-    int totalTrianglesTested = 0;
-    int totalTrianglesHit = 0;
+    Vec3 viewDir = rayDir;
 
     for (size_t bi = 0; bi < m_brushes.size(); ++bi) {
         const Brush& brush = m_brushes[bi];
+        bool isSub = (brush.type == BrushType::Sub);
 
-        // Generate mesh for this brush (no labels)
         MeshData mesh, dummy;
         if (brush.shape == ShapeType::Box) {
             generate_box(brush.center, brush.size, {1,1,1},
@@ -201,10 +198,12 @@ int Editor::pick_brush(int mouseX, int mouseY) {
         if (mesh.vertices.empty() || mesh.indices.empty())
             continue;
 
-        int triCount = (int)mesh.indices.size() / 3;
-        totalTrianglesTested += triCount;
+        int visibleHitCount = 0;          // triangles considered visible (front for Add, back for Sub)
+        int skippedHitCount = 0;          // opposite orientation (skipped)
+        float closestVisibleDist = FLT_MAX;
+        float closestSkippedDist = FLT_MAX;
+        bool loggedAnySkipped = false;
 
-        // Iterate over triangles
         for (size_t i = 0; i < mesh.indices.size(); i += 3) {
             const Vertex& v0 = mesh.vertices[mesh.indices[i+0]];
             const Vertex& v1 = mesh.vertices[mesh.indices[i+1]];
@@ -214,31 +213,58 @@ int Editor::pick_brush(int mouseX, int mouseY) {
             Vec3 p1 = {v1.x, v1.y, v1.z};
             Vec3 p2 = {v2.x, v2.y, v2.z};
 
-            // Compute triangle normal (pointing outward)
             Vec3 e1 = p1 - p0;
             Vec3 e2 = p2 - p0;
             Vec3 normal = Vec3::cross(e1, e2).normalized();
+            float dotNormView = Vec3::dot(normal, viewDir);
 
-            // Skip back‑facing triangles (normal points away from camera)
-            if (Vec3::dot(normal, viewDir) >= 0.0f)
+            // Intersection test
+            float t, u, v;
+            if (!intersect_triangle(rayOrigin, rayDir, p0, p1, p2, t, u, v))
                 continue;
 
-            float t, u, v;
-            if (intersect_triangle(rayOrigin, rayDir, p0, p1, p2, t, u, v)) {
-                totalTrianglesHit++;
+            // For Sub brushes, visible = back‑facing (dot >= 0), skipped = front‑facing (dot < 0)
+            // For Add brushes, visible = front‑facing (dot < 0), skipped = back‑facing (dot >= 0)
+            bool isVisible = isSub ? (dotNormView >= 0.0f) : (dotNormView < 0.0f);
+
+            if (isVisible) {
+                visibleHitCount++;
+                if (t < closestVisibleDist) {
+                    closestVisibleDist = t;
+                }
                 if (t < bestDist) {
                     bestDist = t;
                     bestIdx = (int)bi;
                 }
+            } else {
+                skippedHitCount++;
+                if (t < closestSkippedDist) {
+                    closestSkippedDist = t;
+                }
+                if (!loggedAnySkipped) {
+                    LOG_INFO("  Brush %zu: skipped %s triangle at t=%.3f (normal=(%.3f,%.3f,%.3f), dot=%.3f)",
+                             bi,
+                             isSub ? "front‑facing" : "back‑facing",
+                             t, normal.x, normal.y, normal.z, dotNormView);
+                    loggedAnySkipped = true;
+                }
             }
+        }
+
+        if (visibleHitCount > 0 || skippedHitCount > 0) {
+            LOG_INFO("Brush %zu (%s): %d visible hits (closest=%.3f), %d skipped hits (closest=%.3f)",
+                     bi, brush.name.c_str(),
+                     visibleHitCount,
+                     (visibleHitCount > 0 ? closestVisibleDist : -1.0f),
+                     skippedHitCount,
+                     (skippedHitCount > 0 ? closestSkippedDist : -1.0f));
         }
     }
 
-    LOG_INFO("Total triangles tested: %d, front-facing hit: %d", totalTrianglesTested, totalTrianglesHit);
     if (bestIdx >= 0) {
         LOG_INFO("Selected brush %d at distance %.3f", bestIdx, bestDist);
     } else {
-        LOG_INFO("No brush selected");
+        LOG_INFO("No brush selected (no visible triangle hit)");
     }
     return bestIdx;
 }
