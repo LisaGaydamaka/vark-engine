@@ -63,7 +63,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_wireframeBuffer;
     int m_wireframeVertexCount = 0;
 
-    // ---- Debug ray ----
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_selectedWireframeBuffer;
+    int m_selectedWireframeVertexCount = 0;
+
+    // ---- Debug ray (optional, keep if you want) ----
     Microsoft::WRL::ComPtr<ID3D11Buffer> m_debugRayBuffer;
     int m_debugRayVertexCount = 0;
     Vec3 m_debugRayOrigin;

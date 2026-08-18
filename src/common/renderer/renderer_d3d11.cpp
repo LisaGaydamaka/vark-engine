@@ -171,6 +171,19 @@ bool Renderer::initialize(HWND hwnd, int width, int height)
     device->CreateRasterizerState(&rasterDesc, m_rasterizerState.GetAddressOf());
     context->RSSetState(m_rasterizerState.Get());
 
+    // ---- Depth Stencil States ----
+    D3D11_DEPTH_STENCIL_DESC dsDesc = {};
+    dsDesc.DepthEnable = TRUE;
+    dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+    dsDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
+    device->CreateDepthStencilState(&dsDesc, m_depthTestState.GetAddressOf());
+
+    dsDesc.DepthEnable = FALSE;
+    device->CreateDepthStencilState(&dsDesc, m_noDepthTestState.GetAddressOf());
+
+    // Set default
+    context->OMSetDepthStencilState(m_depthTestState.Get(), 0);
+
     // ---- Main Vertex Shader ----
     const char* vertexShaderCode = R"(
         cbuffer MatrixBuffer : register(b0) {
@@ -423,6 +436,11 @@ void Renderer::shutdown()
 {
     // All ComPtrs auto-release. No manual cleanup needed.
     LOG_INFO("Renderer shutdown complete.");
+}
+
+void Renderer::set_depth_test(bool enable) {
+    ID3D11DepthStencilState* state = enable ? m_depthTestState.Get() : m_noDepthTestState.Get();
+    context->OMSetDepthStencilState(state, 0);
 }
 
 void Renderer::begin_frame()

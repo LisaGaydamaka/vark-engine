@@ -29,17 +29,27 @@ bool Editor::initialize(Renderer* renderer, Level* level) {
         return false;
     }
 
-    // Create dynamic buffer for wireframes
+    // Create dynamic buffer for main wireframes
     D3D11_BUFFER_DESC bd = {};
     bd.Usage = D3D11_USAGE_DYNAMIC;
-    bd.ByteWidth = 1024 * 1024; // 1 MB initial
+    bd.ByteWidth = 1024 * 1024;
     bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
     bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     if (FAILED(device->CreateBuffer(&bd, nullptr, m_wireframeBuffer.GetAddressOf()))) {
-        LOG_WARN("Editor: could not create wireframe buffer");
+        LOG_WARN("Editor: could not create main wireframe buffer");
     }
 
-    // Create debug ray buffer (2 vertices for a line)
+    // Create dynamic buffer for selected wireframe
+    D3D11_BUFFER_DESC selBd = {};
+    selBd.Usage = D3D11_USAGE_DYNAMIC;
+    selBd.ByteWidth = 1024 * 1024;
+    selBd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    selBd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    if (FAILED(device->CreateBuffer(&selBd, nullptr, m_selectedWireframeBuffer.GetAddressOf()))) {
+        LOG_WARN("Editor: could not create selected wireframe buffer");
+    }
+
+    // Create debug ray buffer (optional)
     D3D11_BUFFER_DESC rayBd = {};
     rayBd.Usage = D3D11_USAGE_DYNAMIC;
     rayBd.ByteWidth = 2 * sizeof(Vertex);
@@ -49,7 +59,7 @@ bool Editor::initialize(Renderer* renderer, Level* level) {
         LOG_WARN("Editor: could not create debug ray buffer");
     }
 
-    // Set default camera orbit and update once
+    // Set default camera orbit
     m_editorCamera.set_target({0, 0, 0});
     m_editorCamera.set_distance(20.0f);
     m_editorCamera.update();
@@ -61,6 +71,7 @@ bool Editor::initialize(Renderer* renderer, Level* level) {
 
 void Editor::shutdown() {
     m_wireframeBuffer.Reset();
+    m_selectedWireframeBuffer.Reset();
     m_debugRayBuffer.Reset();
     m_initialized = false;
 }
@@ -81,11 +92,20 @@ void Editor::render() {
     if (!m_initialized) return;
 
     rebuild_wireframe_buffer();
+
+    // Draw non‑selected wireframes (depth test on)
     if (m_wireframeBuffer && m_wireframeVertexCount > 0) {
         m_renderer->draw_lines(m_wireframeBuffer.Get(), m_wireframeVertexCount);
     }
 
-    // ---- Draw debug ray ----
+    // Draw selected wireframe on top (depth test off)
+    if (m_selectedWireframeBuffer && m_selectedWireframeVertexCount > 0) {
+        m_renderer->set_depth_test(false);
+        m_renderer->draw_lines(m_selectedWireframeBuffer.Get(), m_selectedWireframeVertexCount);
+        m_renderer->set_depth_test(true);
+    }
+
+    // Draw debug ray if valid (optional)
     if (m_debugRayValid && m_debugRayBuffer && m_renderer) {
         ID3D11DeviceContext* ctx = (ID3D11DeviceContext*)m_renderer->get_context();
         if (ctx) {
@@ -93,8 +113,8 @@ void Editor::render() {
             HRESULT hr = ctx->Map(m_debugRayBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
             if (SUCCEEDED(hr)) {
                 Vertex* verts = (Vertex*)mapped.pData;
-                Vec3 end = m_debugRayOrigin + m_debugRayDir * 100.0f; // 100 units length
-                verts[0] = {m_debugRayOrigin.x, m_debugRayOrigin.y, m_debugRayOrigin.z, 0,0, 1,0,0}; // red
+                Vec3 end = m_debugRayOrigin + m_debugRayDir * 100.0f;
+                verts[0] = {m_debugRayOrigin.x, m_debugRayOrigin.y, m_debugRayOrigin.z, 0,0, 1,0,0};
                 verts[1] = {end.x, end.y, end.z, 0,0, 1,0,0};
                 ctx->Unmap(m_debugRayBuffer.Get(), 0);
                 m_debugRayVertexCount = 2;
@@ -105,38 +125,52 @@ void Editor::render() {
 }
 
 void Editor::rebuild_wireframe_buffer() {
-    if (!m_wireframeBuffer) return;
+    if (!m_wireframeBuffer || !m_selectedWireframeBuffer) return;
 
-    std::vector<Vertex> lineVerts;
-    lineVerts.reserve(m_brushes.size() * 48);
+    std::vector<Vertex> mainLineVerts;
+    std::vector<Vertex> selLineVerts;
+    mainLineVerts.reserve(m_brushes.size() * 48);
+    selLineVerts.reserve(48);
 
     for (size_t i = 0; i < m_brushes.size(); ++i) {
         const auto& b = m_brushes[i];
-        Vec3 color = (i == (size_t)m_selectedIndex) ? Vec3{0.0f, 1.0f, 0.0f} : Vec3{0.0f, 0.0f, 0.0f};
+        bool isSelected = (i == (size_t)m_selectedIndex);
+        Vec3 color = isSelected ? Vec3{0.0f, 1.0f, 0.0f} : Vec3{0.0f, 0.0f, 0.0f};
+
+        std::vector<Vertex> tempVerts;
         if (b.shape == ShapeType::Box) {
-            generate_box_wireframe(b.center, b.size, color, lineVerts);
+            generate_box_wireframe(b.center, b.size, color, tempVerts);
         } else {
-            generate_wedge_wireframe(b.center, b.size, color, lineVerts);
+            generate_wedge_wireframe(b.center, b.size, color, tempVerts);
+        }
+
+        if (isSelected) {
+            selLineVerts.insert(selLineVerts.end(), tempVerts.begin(), tempVerts.end());
+        } else {
+            mainLineVerts.insert(mainLineVerts.end(), tempVerts.begin(), tempVerts.end());
         }
     }
 
-    if (lineVerts.empty()) {
-        m_wireframeVertexCount = 0;
-        return;
-    }
+    auto update_buffer = [&](ID3D11Buffer* buffer, const std::vector<Vertex>& verts, int& outCount) {
+        if (verts.empty()) {
+            outCount = 0;
+            return;
+        }
+        ID3D11DeviceContext* ctx = (ID3D11DeviceContext*)m_renderer->get_context();
+        if (!ctx) return;
+        D3D11_MAPPED_SUBRESOURCE mapped;
+        HRESULT hr = ctx->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        if (FAILED(hr)) return;
+        size_t size = verts.size() * sizeof(Vertex);
+        if (size > 0) {
+            memcpy(mapped.pData, verts.data(), size);
+        }
+        ctx->Unmap(buffer, 0);
+        outCount = (int)verts.size();
+    };
 
-    ID3D11DeviceContext* ctx = (ID3D11DeviceContext*)m_renderer->get_context();
-    if (!ctx) return;
-
-    D3D11_MAPPED_SUBRESOURCE mapped;
-    HRESULT hr = ctx->Map(m_wireframeBuffer.Get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (FAILED(hr)) return;
-    size_t size = lineVerts.size() * sizeof(Vertex);
-    if (size > 0) {
-        memcpy(mapped.pData, lineVerts.data(), size);
-    }
-    ctx->Unmap(m_wireframeBuffer.Get(), 0);
-    m_wireframeVertexCount = (int)lineVerts.size();
+    update_buffer(m_wireframeBuffer.Get(), mainLineVerts, m_wireframeVertexCount);
+    update_buffer(m_selectedWireframeBuffer.Get(), selLineVerts, m_selectedWireframeVertexCount);
 }
 
 // ---- Möller–Trumbore ray-triangle intersection ----
@@ -208,10 +242,7 @@ int Editor::pick_brush(int mouseX, int mouseY) {
             if (!intersect_triangle(rayOrigin, rayDir, p0, p1, p2, t, u, v))
                 continue;
 
-            // For Sub brushes: visible = back‑facing (dot >= 0)
-            // For Add brushes: visible = front‑facing (dot < 0)
             bool isVisible = isSub ? (dotNormView >= 0.0f) : (dotNormView < 0.0f);
-
             if (isVisible && t < bestDist) {
                 bestDist = t;
                 bestIdx = (int)bi;
@@ -237,10 +268,7 @@ Vec3 Editor::screen_to_world_ray(int mouseX, int mouseY) {
     Vec3 camPos = cam->get_position();
     Vec3 target = m_editorCamera.get_target();
 
-    // Use the actual look direction from camera to target
     Vec3 forward = (target - camPos).normalized();
-
-    // Compute right and up vectors from this forward direction
     Vec3 worldUp = {0.0f, 1.0f, 0.0f};
     Vec3 right = Vec3::cross(worldUp, forward).normalized();
     Vec3 up = Vec3::cross(forward, right).normalized();
@@ -251,14 +279,6 @@ Vec3 Editor::screen_to_world_ray(int mouseX, int mouseY) {
 
     Vec3 dir = forward + right * (ndcX * tanHalfFov * aspect) + up * (ndcY * tanHalfFov);
     dir = dir.normalized();
-
-    LOG_INFO("screen_to_world_ray: mouse(%d,%d) -> ndc(%.3f,%.3f), dir=(%.3f,%.3f,%.3f)",
-             mouseX, mouseY, ndcX, ndcY, dir.x, dir.y, dir.z);
-    LOG_INFO("  camera pos=(%.3f,%.3f,%.3f), target=(%.3f,%.3f,%.3f), forward=(%.3f,%.3f,%.3f)",
-             camPos.x, camPos.y, camPos.z,
-             target.x, target.y, target.z,
-             forward.x, forward.y, forward.z);
-
     return dir;
 }
 
@@ -289,9 +309,7 @@ bool Editor::intersect_aabb(const Vec3& rayOrigin, const Vec3& rayDir,
 void Editor::renumber_times() {
     if (m_brushes.empty()) return;
     std::sort(m_brushes.begin(), m_brushes.end(),
-        [](const Brush& a, const Brush& b) {
-            return a.time < b.time;
-        });
+        [](const Brush& a, const Brush& b) { return a.time < b.time; });
     for (int i = 0; i < (int)m_brushes.size(); ++i) {
         m_brushes[i].time = i;
     }
@@ -312,15 +330,11 @@ void Editor::set_brush_time(int index, int newTime) {
 
     Brush movedBrush = m_brushes[index];
     m_brushes.erase(m_brushes.begin() + index);
-
-    // Insert at the exact desired position (target)
     m_brushes.insert(m_brushes.begin() + target, movedBrush);
 
-    // Renumber all brushes sequentially
     for (int i = 0; i < (int)m_brushes.size(); ++i) {
         m_brushes[i].time = i;
     }
-
     m_selectedIndex = target;
 }
 

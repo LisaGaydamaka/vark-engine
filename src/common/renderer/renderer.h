@@ -33,6 +33,8 @@ public:
     void resize(int width, int height);
     bool is_device_lost() const { return m_deviceLost; }
 
+    void set_depth_test(bool enable);
+
 private:
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context;
@@ -68,4 +70,7 @@ private:
     ComPtr<ID3D11PixelShader> linePixelShader;
     ComPtr<ID3D11VertexShader> lineVertexShader;
     ComPtr<ID3D11InputLayout> lineInputLayout;
+
+    ComPtr<ID3D11DepthStencilState> m_depthTestState;
+    ComPtr<ID3D11DepthStencilState> m_noDepthTestState;
 };
