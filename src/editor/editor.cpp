@@ -203,6 +203,11 @@ int Editor::pick_brush(int mouseX, int mouseY) {
 
     bool sameSpot = (abs(mouseX - m_lastPickX) <= 2 && abs(mouseY - m_lastPickY) <= 2);
 
+    // If same spot but we have no candidates, treat as a new pick (recast ray)
+    if (sameSpot && m_pickCandidates.empty()) {
+        sameSpot = false;
+    }
+
     if (!sameSpot) {
         Vec3 rayOrigin = m_editorCamera.get_camera()->get_position();
         Vec3 rayDir = screen_to_world_ray(mouseX, mouseY);
@@ -260,6 +265,7 @@ int Editor::pick_brush(int mouseX, int mouseY) {
             }
         }
 
+        // Sort by distance (closest first)
         std::sort(hits.begin(), hits.end(),
                   [](const HitInfo& a, const HitInfo& b) { return a.dist < b.dist; });
 
@@ -274,14 +280,17 @@ int Editor::pick_brush(int mouseX, int mouseY) {
         m_pickIndex = 0;
 
         if (m_pickCandidates.empty()) {
+            // Clear last position so next click won't be considered same spot
+            m_lastPickX = -1;
+            m_lastPickY = -1;
             return -1;
         }
     }
 
+    // Now we have candidates; cycle
     int selectedIdx = m_pickCandidates[m_pickIndex % m_pickCandidates.size()];
     m_pickIndex = (m_pickIndex + 1) % m_pickCandidates.size();
 
-    LOG_INFO("Selected brush %d (cycle %d of %zu)", selectedIdx, m_pickIndex, m_pickCandidates.size());
     return selectedIdx;
 }
 

@@ -24,9 +24,11 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 // Track mouse position for Editor::on_mouse_move
 static int g_lastMouseX = 0;
 static int g_lastMouseY = 0;
+static int g_mouseDownX = 0;
+static int g_mouseDownY = 0;
+static bool g_mouseDown = false;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    // Let ImGui handle its own messages first
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wParam, lParam))
         return 0;
 
@@ -44,7 +46,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
-        // ---- Mouse input ----
         case WM_MOUSEMOVE: {
             int x = GET_X_LPARAM(lParam);
             int y = GET_Y_LPARAM(lParam);
@@ -69,10 +70,32 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
         case WM_LBUTTONDOWN: {
             if (!ImGui::GetIO().WantCaptureMouse) {
+                g_mouseDown = true;
+                g_mouseDownX = GET_X_LPARAM(lParam);
+                g_mouseDownY = GET_Y_LPARAM(lParam);
+                SetFocus(hwnd);
+            }
+            return 0;
+        }
+
+        case WM_LBUTTONUP: {
+            if (!ImGui::GetIO().WantCaptureMouse && g_mouseDown) {
                 int x = GET_X_LPARAM(lParam);
                 int y = GET_Y_LPARAM(lParam);
-                int idx = g_editor.pick_brush(x, y);
-                if (idx >= 0) g_editor.select_brush(idx);
+                int dx = x - g_mouseDownX;
+                int dy = y - g_mouseDownY;
+                if (dx * dx + dy * dy <= 9) {
+                    LOG_INFO("WM_LBUTTONUP: click at (%d,%d), calling pick_brush", x, y);
+                    int idx = g_editor.pick_brush(x, y);
+                    LOG_INFO("WM_LBUTTONUP: pick_brush returned %d", idx);
+                    if (idx >= 0) {
+                        g_editor.select_brush(idx);
+                    } else {
+                        LOG_INFO("WM_LBUTTONUP: deselecting brush (click on empty space)");
+                        g_editor.select_brush(-1);
+                    }
+                }
+                g_mouseDown = false;
             }
             return 0;
         }
@@ -93,7 +116,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             return 0;
         }
 
-        // ---- Keyboard shortcuts ----
         case WM_KEYDOWN: {
             if (!ImGui::GetIO().WantCaptureKeyboard) {
                 bool ctrl = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
