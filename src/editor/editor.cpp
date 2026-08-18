@@ -196,31 +196,25 @@ void Editor::set_brush_name(int index, const std::string& name) {
 // ---- Set brush time with reordering and conflict resolution ----
 void Editor::set_brush_time(int index, int newTime) {
     if (index < 0 || index >= (int)m_brushes.size()) return;
+    int N = (int)m_brushes.size();
+    int target = newTime;
+    if (target < 0) target = 0;
+    if (target >= N) target = N - 1;
+    if (index == target) return; // already at that time (not strictly needed, but fine)
 
-    // Clamp newTime to valid range
-    int targetPos = newTime;
-    if (targetPos < 0) targetPos = 0;
-    if (targetPos >= (int)m_brushes.size()) targetPos = (int)m_brushes.size();
-
-    // If already at target position, nothing to do
-    if (index == targetPos) return;
-
-    // Move brush from 'index' to 'targetPos'
     Brush movedBrush = m_brushes[index];
     m_brushes.erase(m_brushes.begin() + index);
 
-    // Adjust target if we removed before it
-    if (targetPos > index) targetPos--;
-
-    m_brushes.insert(m_brushes.begin() + targetPos, movedBrush);
+    // Insert at the *exact* final desired position (target)
+    // No adjustment needed because we want the brush to end up at time 'target'
+    m_brushes.insert(m_brushes.begin() + target, movedBrush);
 
     // Renumber all brushes sequentially (0..N-1)
     for (int i = 0; i < (int)m_brushes.size(); ++i) {
         m_brushes[i].time = i;
     }
 
-    // Select the moved brush
-    m_selectedIndex = targetPos;
+    m_selectedIndex = target;
 }
 
 void Editor::save_level() {

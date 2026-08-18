@@ -20,6 +20,17 @@ void BuildEditorUI(Editor& editor) {
     BuildRightPanel(editor);
 }
 
+// Filter callback: allow only digits
+static int TimeInputFilter(ImGuiInputTextCallbackData* data) {
+    if (data->EventFlag == ImGuiInputTextFlags_CallbackCharFilter) {
+        if (data->EventChar >= '0' && data->EventChar <= '9') {
+            return 0; // accept
+        }
+        return 1; // reject
+    }
+    return 0;
+}
+
 // ------------------------------------------------------------------
 // Menu Bar
 // ------------------------------------------------------------------
@@ -60,6 +71,8 @@ static void BuildMenuBar(Editor& editor) {
 // ------------------------------------------------------------------
 // Left Panel – Brush List with editable Time and Name
 // ------------------------------------------------------------------
+// src/editor/editor_ui.cpp – BuildLeftPanel with custom drag‑and‑drop
+
 static void BuildLeftPanel(Editor& editor) {
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImVec2 workPos = viewport->WorkPos;
@@ -101,49 +114,64 @@ static void BuildLeftPanel(Editor& editor) {
     const auto& brushes = editor.get_brushes();
     int selected = editor.get_selected_index();
 
-    // Static state for inline editing
+    // Static state for inline editing (Time / Name)
     static int editingIndex = -1;
     static int editingColumn = -1;  // 0 = Time, 1 = Name
     static char editingBuffer[128] = "";
 
+    // ---- Drag‑and‑drop state ----
+    static int dragSrc = -1;
+    static bool isDragging = false;
+    static bool dragCandidate = false;
+    static int dragCandidateIdx = -1;
+    static ImVec2 dragStartMouse;
+    static int dropTarget = -1;
+
+    struct ItemRect { int sortedIdx; float topY; float bottomY; };
+    std::vector<ItemRect> itemRects;
+    itemRects.reserve(brushes.size());
+
+    // Sort brushes by time (ascending)
+    std::vector<int> sortedIndices;
+    sortedIndices.resize(brushes.size());
+    for (int i = 0; i < (int)brushes.size(); ++i) sortedIndices[i] = i;
+    std::sort(sortedIndices.begin(), sortedIndices.end(),
+        [&](int a, int b) { return brushes[a].time < brushes[b].time; });
+
     ImGui::BeginChild("BrushList", ImVec2(0, 0), true);
 
+    // ---- Table setup ----
     if (ImGui::BeginTable("BrushTable", 2,
-            ImGuiTableFlags_Resizable |
-            ImGuiTableFlags_NoBordersInBody |
-            ImGuiTableFlags_SizingStretchProp))
+        ImGuiTableFlags_Resizable | ImGuiTableFlags_NoBordersInBody))
     {
+        // Column 0: Time (fixed width ~40px)
         ImGui::TableSetupColumn("Time", ImGuiTableColumnFlags_WidthFixed, 40.0f);
+        // Column 1: Brush name (stretches)
         ImGui::TableSetupColumn("Brush", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableHeadersRow();
 
-        // Sort brushes by time (ascending)
-        std::vector<int> sortedIndices;
-        sortedIndices.resize(brushes.size());
-        for (int i = 0; i < (int)brushes.size(); ++i) sortedIndices[i] = i;
-        std::sort(sortedIndices.begin(), sortedIndices.end(),
-            [&](int a, int b) { return brushes[a].time < brushes[b].time; });
-
+        // ---- Render each brush row ----
         for (int idx : sortedIndices) {
             const auto& b = brushes[idx];
             bool isSelected = (idx == selected);
             bool isEditing = (idx == editingIndex);
 
             ImGui::TableNextRow();
+            ImVec2 rowMin(FLT_MAX, FLT_MAX);
+            ImVec2 rowMax(-FLT_MAX, -FLT_MAX);
 
-            // ---- Row unique ID ----
-            ImGui::PushID(idx);
-
-            // ---- Time column ----
+            // ---- Column 0: Time ----
             ImGui::TableSetColumnIndex(0);
+            ImGui::PushID(idx);
             if (isEditing && editingColumn == 0) {
-                // Editing Time – zero padding, full width, auto select all
                 bool commit = false;
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
                 ImGui::SetNextItemWidth(-1.0f);
                 ImGui::SetKeyboardFocusHere(0);
                 if (ImGui::InputText("##edit_time", editingBuffer, sizeof(editingBuffer),
-                    ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
+                    ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll |
+                    ImGuiInputTextFlags_CallbackCharFilter,
+                    TimeInputFilter))
                 {
                     commit = true;
                 }
@@ -156,26 +184,39 @@ static void BuildLeftPanel(Editor& editor) {
                     editor.set_brush_time(idx, newTime);
                     editingIndex = -1;
                 }
+                ImVec2 min = ImGui::GetItemRectMin();
+                ImVec2 max = ImGui::GetItemRectMax();
+                rowMin.x = std::min(rowMin.x, min.x); rowMin.y = std::min(rowMin.y, min.y);
+                rowMax.x = std::max(rowMax.x, max.x); rowMax.y = std::max(rowMax.y, max.y);
             } else {
-                // Normal Time cell: clickable to select, double-click to edit
                 char timeLabel[32];
                 snprintf(timeLabel, sizeof(timeLabel), "%d", b.time);
-                ImGui::PushID("time");
-                if (ImGui::Selectable(timeLabel, isSelected, ImGuiSelectableFlags_None)) {
+                // Use selectable with no background to look like a text cell
+                bool sel = ImGui::Selectable(timeLabel, isSelected);
+                if (sel && !isDragging) {
                     editor.select_brush(idx);
+                }
+                if (ImGui::IsItemClicked(0) && !isDragging && !ImGui::GetIO().MouseDoubleClicked[0]) {
+                    dragCandidate = true;
+                    dragCandidateIdx = idx;
+                    dragStartMouse = ImGui::GetIO().MousePos;
                 }
                 if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
                     editingIndex = idx;
                     editingColumn = 0;
                     snprintf(editingBuffer, sizeof(editingBuffer), "%d", b.time);
                 }
-                ImGui::PopID();
+                ImVec2 min = ImGui::GetItemRectMin();
+                ImVec2 max = ImGui::GetItemRectMax();
+                rowMin.x = std::min(rowMin.x, min.x); rowMin.y = std::min(rowMin.y, min.y);
+                rowMax.x = std::max(rowMax.x, max.x); rowMax.y = std::max(rowMax.y, max.y);
             }
+            ImGui::PopID();
 
-            // ---- Name column ----
+            // ---- Column 1: Brush name ----
             ImGui::TableSetColumnIndex(1);
+            ImGui::PushID(idx + 1000); // separate ID for second column
             if (isEditing && editingColumn == 1) {
-                // Editing Name – zero padding, full width, auto select all
                 bool commit = false;
                 ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
                 ImGui::SetNextItemWidth(-1.0f);
@@ -193,30 +234,146 @@ static void BuildLeftPanel(Editor& editor) {
                     editor.set_brush_name(idx, editingBuffer);
                     editingIndex = -1;
                 }
+                ImVec2 min = ImGui::GetItemRectMin();
+                ImVec2 max = ImGui::GetItemRectMax();
+                rowMin.x = std::min(rowMin.x, min.x); rowMin.y = std::min(rowMin.y, min.y);
+                rowMax.x = std::max(rowMax.x, max.x); rowMax.y = std::max(rowMax.y, max.y);
             } else {
-                // Normal Name cell: clickable to select, double-click to edit
-                ImGui::PushID("name");
-                if (ImGui::Selectable(b.name.c_str(), isSelected, ImGuiSelectableFlags_None)) {
+                bool sel = ImGui::Selectable(b.name.c_str(), isSelected);
+                if (sel && !isDragging) {
                     editor.select_brush(idx);
+                }
+                if (ImGui::IsItemClicked(0) && !isDragging && !ImGui::GetIO().MouseDoubleClicked[0]) {
+                    dragCandidate = true;
+                    dragCandidateIdx = idx;
+                    dragStartMouse = ImGui::GetIO().MousePos;
                 }
                 if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
                     editingIndex = idx;
                     editingColumn = 1;
                     strncpy_s(editingBuffer, sizeof(editingBuffer), b.name.c_str(), _TRUNCATE);
                 }
-                ImGui::PopID();
+                ImVec2 min = ImGui::GetItemRectMin();
+                ImVec2 max = ImGui::GetItemRectMax();
+                rowMin.x = std::min(rowMin.x, min.x); rowMin.y = std::min(rowMin.y, min.y);
+                rowMax.x = std::max(rowMax.x, max.x); rowMax.y = std::max(rowMax.y, max.y);
             }
-
-            // ---- End row ID ----
             ImGui::PopID();
+
+            // Store row vertical range (screen coordinates)
+            if (rowMin.x < FLT_MAX && rowMax.x > -FLT_MAX) {
+                itemRects.push_back({ idx, rowMin.y, rowMax.y });
+            }
         }
+
         ImGui::EndTable();
     }
 
     ImGui::EndChild();
+
+    // ---- Drag‑and‑drop logic (unchanged from previous version) ----
+    if (dragCandidate && !isDragging) {
+        ImVec2 mouse = ImGui::GetIO().MousePos;
+        float dx = mouse.x - dragStartMouse.x;
+        float dy = mouse.y - dragStartMouse.y;
+        if (dx*dx + dy*dy > 16.0f) {
+            isDragging = true;
+            dragSrc = dragCandidateIdx;
+            dragCandidate = false;
+        }
+    }
+
+    if (isDragging) {
+        float mouseY = ImGui::GetIO().MousePos.y;
+        int N = (int)itemRects.size();
+        dropTarget = N;
+        for (int i = 0; i < N; ++i) {
+            const auto& r = itemRects[i];
+            if (mouseY >= r.topY && mouseY < r.bottomY) {
+                float mid = (r.topY + r.bottomY) * 0.5f;
+                dropTarget = (mouseY < mid) ? i : i + 1;
+                break;
+            }
+            if (mouseY < r.topY) {
+                dropTarget = i;
+                break;
+            }
+        }
+        if (dropTarget < 0) dropTarget = 0;
+        if (dropTarget > N) dropTarget = N;
+
+        float lineY;
+        if (dropTarget < N) {
+            lineY = itemRects[dropTarget].topY;
+        } else {
+            lineY = itemRects.empty() ? ImGui::GetCursorScreenPos().y : itemRects.back().bottomY;
+        }
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(ImGui::GetWindowPos().x, lineY),
+            ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), lineY),
+            IM_COL32(255, 255, 0, 255), 2.0f
+        );
+    }
+
+    if (ImGui::IsMouseReleased(0)) {
+        if (isDragging && dragSrc != -1 && dropTarget != -1) {
+            int N = (int)itemRects.size();
+            int srcSorted = dragSrc;
+            int dst = dropTarget;
+
+            LOG_INFO("=== DRAG RELEASE ===");
+            LOG_INFO("srcSorted = %d, dst = %d, N = %d", srcSorted, dst, N);
+
+            // Log current order
+            LOG_INFO("Current order (time -> brush):");
+            for (int i = 0; i < N; ++i) {
+                int idx = sortedIndices[i];
+                const auto& b = brushes[idx];
+                LOG_INFO("  sorted[%d] = brush[%d], time=%d, name='%s'", i, idx, b.time, b.name.c_str());
+            }
+
+            int targetIndex = (dst > srcSorted) ? (dst - 1) : dst;
+            if (targetIndex < 0) targetIndex = 0;
+            if (targetIndex >= N) targetIndex = N - 1;
+
+            int originalIdx = sortedIndices[srcSorted];
+            int currentTime = brushes[originalIdx].time;
+
+            LOG_INFO("originalIdx = %d, currentTime = %d, targetIndex = %d", originalIdx, currentTime, targetIndex);
+
+            if (targetIndex != currentTime) {
+                editor.set_brush_time(originalIdx, targetIndex);
+                LOG_INFO("Reordered brush %d from time %d to %d", originalIdx, currentTime, targetIndex);
+
+                // Log new order after reorder
+                std::vector<int> newSorted;
+                newSorted.resize(brushes.size());
+                for (int i = 0; i < (int)brushes.size(); ++i) newSorted[i] = i;
+                std::sort(newSorted.begin(), newSorted.end(),
+                    [&](int a, int b) { return brushes[a].time < brushes[b].time; });
+                LOG_INFO("New order after reorder:");
+                for (int i = 0; i < (int)newSorted.size(); ++i) {
+                    int idx = newSorted[i];
+                    const auto& b = brushes[idx];
+                    LOG_INFO("  sorted[%d] = brush[%d], time=%d, name='%s'", i, idx, b.time, b.name.c_str());
+                }
+            } else {
+                LOG_INFO("No reorder needed (target time equals current)");
+            }
+        }
+
+        isDragging = false;
+        dragCandidate = false;
+        dragSrc = -1;
+        dragCandidateIdx = -1;
+        dropTarget = -1;
+    }
+
     ImGui::End();
     ImGui::PopStyleVar();
 }
+
+
 
 // ------------------------------------------------------------------
 // Right Panel – Inspector
